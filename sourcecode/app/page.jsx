@@ -17,12 +17,13 @@ export default function Home() {
 
   useEffect(() => {
     if (containerRef.current) {
+      // Follow streamed tokens instantly; smooth-scroll only for new messages.
       containerRef.current.scrollTo({
         top: containerRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior: isLoading ? "auto" : "smooth",
       });
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   return (
     <div>

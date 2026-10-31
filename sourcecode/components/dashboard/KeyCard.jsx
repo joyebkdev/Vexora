@@ -17,13 +17,13 @@ const KeyCard = ({ item, active, onUse, onEdit, onDelete }) => {
   const testKey = async () => {
     setTesting(true);
     try {
-      const models = await fetchProviderModels(
+      const result = await fetchProviderModels(
         item.provider,
         item.apiKey,
         item.endpoint
       );
       toast.success(
-        `${provider.name} key works — ${models.length} models available`
+        `${provider.name} key works — ${result.models.length} models available`
       );
     } catch (error) {
       toast.error(error.message);

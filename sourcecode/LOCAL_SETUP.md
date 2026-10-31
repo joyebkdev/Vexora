@@ -1,8 +1,9 @@
 # Local Setup (Windows ARM64)
 
-This project runs entirely in the browser with **multiple free-tier AI
-providers**. No database, accounts, backend routes or environment variables are
-needed.
+This project runs with **multiple free-tier AI providers**. Chats and keys live
+in the browser. No database, accounts or environment variables are needed. One
+small public route (`/api/free-models`) reads Google's pricing page; it never
+receives API keys.
 
 ## Run
 
@@ -16,6 +17,10 @@ http://localhost:3000/dashboard), and add a free key from Groq, Google Gemini,
 OpenRouter, Cerebras or Mistral. Chats and keys are saved in this browser's
 `localStorage`.
 
+Back in the chat, click the model name under the message box to switch models
+for the active key. The menu is fetched live from the provider, searchable, and
+marks free models.
+
 ## What changed from upstream
 
 - Removed Clerk auth (`middleware.ts`, `ClerkProvider`, user buttons).
@@ -25,6 +30,10 @@ OpenRouter, Cerebras or Mistral. Chats and keys are saved in this browser's
   `context/AppContext.jsx` and persisted to `localStorage`.
 - Added a `/dashboard` page and `components/dashboard/*` for managing multiple
   provider keys, models and the active key.
+- Models are loaded at runtime from each provider's official `/models` endpoint;
+  no model IDs are hardcoded.
+- Added `/api/free-models`, a cached read-only parser for Google's public
+  Gemini pricing page.
 - Uses free-tier providers from `config/providers.js` (Groq, Gemini, OpenRouter,
   Cerebras, Mistral) plus any custom OpenAI-compatible endpoint.
 - `.env.local` / `.env.example` are no longer used.
@@ -66,14 +75,20 @@ or use "Clear site data" in the browser.
 ## Provider notes
 
 - Free tiers are rate-limited; errors are shown as toasts in the app.
-- Add keys from **API keys** in the sidebar. **Load models** fetches the models
-  each key can actually access.
-- Groq: default model is `openai/gpt-oss-120b`; Llama 3.3 70B is Enterprise-only
-  on Groq, so prefer the loaded list.
-- OpenRouter: only `:free`/zero-cost models are listed when available.
-- Gemini: the dashboard lists Google's official free-tier text models
-  (https://ai.google.dev/gemini-api/docs/pricing), including Gemini 3.8 Flash,
-  3.6 Flash, 3.5/3.1 Flash-Lite and 2.5 Pro/Flash. Paid-only models such as
-  Gemini 4 Argon and Gemini 3.1 Pro Preview are excluded.
+- Add keys from **API keys** in the sidebar. Models load automatically from the
+  provider's official model list; use **Refresh models** to reload.
+- Groq, Cerebras and Mistral do not publish per-model free flags. Vexora shows
+  every chat model the key can access; the provider enforces free-tier limits.
+- Gemini 2.5 Pro/Flash/Flash-Lite are hidden (`UNAVAILABLE_MODEL_PATTERNS` in
+  `config/providers.js`) because Google no longer serves them to new keys.
+- Gemini 3.8 Flash is Google's heavy reasoning model and can respond much slower
+  than Flash-Lite. New keys default to the fastest available model; replies
+  stream as they are generated so the wait is visible.
+- OpenRouter: free models are detected live from the `:free` suffix and
+  zero-price metadata.
+- Gemini: Google's `/models` API has no pricing data, so Vexora parses the
+  official pricing page (https://ai.google.dev/gemini-api/docs/pricing) and
+  shows only models marked "Free of charge". If that page cannot be read, the
+  dialog warns you and shows the full list.
 - Each key is sent only to the provider that owns it. Custom keys use the
-  endpoint you enter.
+  endpoint you enter. `/api/free-models` never receives a key.

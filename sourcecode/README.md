@@ -2,13 +2,15 @@
 
 Vexora is a local-first AI chat app built with Next.js, React and Tailwind CSS.
 
-It runs **entirely in the browser** and supports free-tier API keys from
+Chats and API keys stay in the browser. It supports free-tier API keys from
 multiple providers:
 
 - No accounts or sign-in.
-- No database and no API routes.
+- No database.
 - Chats are stored in the browser with `localStorage`.
 - API keys are stored in the browser and sent directly to the provider you pick.
+- One small public route reads Google's pricing page to detect free-tier Gemini
+  models; API keys are never sent to it.
 
 ## Features
 
@@ -16,16 +18,27 @@ multiple providers:
   OpenRouter, Cerebras, Mistral, or any OpenAI-compatible endpoint.
 - **One active key** - switch provider only when you need to; every chat uses
   the active key, provider and model.
-- **Model discovery** - **Load models** asks the provider which models the key
-  can use, avoiding "model does not exist" errors.
-- **Official Gemini free models** - Gemini's free-tier text models are built in
-  (Gemini 3.8 Flash, 3.6 Flash, 3.5/3.1 Flash-Lite, 2.5 Pro/Flash), so they can
-  be picked without loading anything.
+- **Dynamic model discovery** - models load automatically from each provider's
+  official model API when you enter a key. No model IDs are hardcoded, so new or
+  retired models appear without updating Vexora.
+- **Live free-model detection** - OpenRouter free models are filtered from live
+  pricing data, and Gemini's free-tier list is read from Google's official
+  pricing page. Other providers expose their whole free-tier-eligible list.
+- **Model picker in chat** - click the model name below the message box to
+  switch models for the active key. The list is fetched live, searchable, and
+  remembers your choice.
+- **Retired model filter** - models the provider no longer serves (for example
+  Gemini 2.5 Pro/Flash/Flash-Lite) are hidden, and a saved selection is cleared
+  so the chat asks for a working model instead of failing.
+- **Fast defaults + streaming** - free lists put Flash-Lite/Mini models first so
+  a new key does not default to a heavy reasoning model, and replies stream
+  token by token instead of waiting for the full answer.
 - **Chats that persist locally** - reload the page and conversations remain.
 - **Multiple chats** - create, rename, delete and switch between conversations.
 - **Markdown + code highlighting** - rendered with `react-markdown` and Prism.
 - **Responsive layout** - works on desktop and mobile.
-- **No backend** - nothing to host, connect, or configure.
+- **No database** - only a small read-only route for Google's public pricing
+  page.
 
 ## Tech stack
 
@@ -53,11 +66,12 @@ multiple providers:
 3. Open http://localhost:3000
 
 4. Open **API keys** in the sidebar (or http://localhost:3000/dashboard), pick a
-   free-tier provider, paste a key and click **Add key**. Gemini shows the
-   official free-tier models as one-click presets; use **Load models** for any
-   other provider to see what that key can access.
+   free-tier provider, and paste a key. Models load automatically from that
+   provider's official list; choose a free model and click **Add key**.
 
-5. Start chatting. The first message becomes the chat title automatically.
+5. Start chatting. The first message becomes the chat title automatically. To
+   switch models, click the model name under the message box and pick from the
+   live list; free models are marked with a badge.
 
 ### Production build
 
@@ -71,6 +85,8 @@ npm run start
 ```text
 vexora/
 ├── app/
+│   ├── api/
+│   │   └── free-models/ # parses Google's public pricing page
 │   ├── dashboard/       # API key dashboard
 │   ├── globals.css
 │   ├── layout.js
@@ -83,6 +99,7 @@ vexora/
 │   │   └── KeyModal.jsx
 │   ├── ChatLabel.jsx
 │   ├── Message.jsx
+│   ├── ModelPicker.jsx  # live model menu under the chat box
 │   ├── PromptBox.jsx
 │   └── Sidebar.jsx
 ├── config/
@@ -100,9 +117,12 @@ vexora/
 - Older `vexora:settings` and `deepseek-clone:*` data is migrated automatically
   on first load.
 - Keys are sent **only** to the provider you selected.
+- `/api/free-models` fetches Google's public Gemini pricing page on the server
+  and caches the parsed free-model list for six hours. It never receives or
+  stores API keys.
 - Clearing site data in your browser removes all chats and saved keys.
-- Because everything is client-side, there is no server-side history or shared
-  database.
+- Chats and keys stay in your browser; there is no server-side history or
+  shared database.
 
 ## Notes
 
@@ -111,13 +131,25 @@ vexora/
 - `localStorage` is per browser and per origin. Chats and keys do not sync
   between devices or browsers.
 - Private/incognito mode may discard storage when the window closes.
-- **Load models** is provider-aware: it filters Groq's non-chat models, Gemini's
-  non-text models, and OpenRouter's paid models where possible.
-- Gemini's built-in list comes from the official pricing page
-  (https://ai.google.dev/gemini-api/docs/pricing). Gemini 4 Argon and Gemini 3.1
-  Pro Preview are **not** on the free tier and are intentionally excluded.
-- Some model names are plan-specific, so always prefer the loaded list if a
-  request reports that the model does not exist.
+- Models load from the provider's official `/models` endpoint. Use **Refresh
+  models** after changing your plan or key.
+- Auto-selected models prefer Flash-Lite/Mini, then Flash, then Pro, so a new
+  key starts on a fast model. Pick another in the chat's model menu.
+- Gemini 2.5 Pro, Flash and Flash-Lite are hidden because Google no longer serves
+  them to new API keys even though its pricing page still lists them. Add any
+  future retired IDs to `UNAVAILABLE_MODEL_PATTERNS` in `config/providers.js`.
+- Replies stream token by token. If a provider ignores streaming, Vexora falls
+  back to the full JSON response automatically.
+- **Load/refresh** filters Groq's non-chat models, Gemini's non-text models, and
+  OpenRouter's paid models.
+- Gemini's free list is parsed live from the official pricing page
+  (https://ai.google.dev/gemini-api/docs/pricing). If Google changes the page or
+  is temporarily unavailable, Vexora shows all available models and warns you in
+  the key dialog instead of guessing.
+- Free-tier rules are provider-side and rate-limited. A model listed as free can
+  still return quota errors.
+- Some model names are plan-specific, so always prefer the live list if a request
+  reports that the model does not exist.
 
 ## License
 
@@ -128,5 +160,5 @@ MIT. See [LICENSE](LICENSE).
 Original project: [elyse502/deepseek-clone](https://github.com/elyse502/deepseek-clone)
 by [NIYIBIZI Elysée](https://github.com/elyse502).
 
-Modified locally to remove Clerk, MongoDB and all backend routes, to use
-browser storage with multiple AI providers, and to rebrand the UI as **Vexora**.
+Modified locally to remove Clerk and MongoDB, use browser storage with multiple
+AI providers, add live model discovery, and rebrand the UI as **Vexora**.

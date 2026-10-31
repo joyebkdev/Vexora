@@ -6,7 +6,10 @@ import {
   useEffect,
   useState,
 } from "react";
-import { getProvider } from "@/config/providers";
+import {
+  getProvider,
+  isUnavailableModel,
+} from "@/config/providers";
 
 const CHATS_KEY = "vexora:chats";
 const SELECTED_KEY = "vexora:selected-chat";
@@ -21,7 +24,6 @@ const LEGACY_KEYS = {
   settings: "deepseek-clone:settings",
 };
 const LEGACY_API_KEYS = ["deepseek-clone:api-key", "vexora:api-key"];
-const LEGACY_MODEL = "llama-3.3-70b-versatile";
 
 const readStored = (key, legacyKey) => {
   try {
@@ -76,19 +78,17 @@ const normalizeKey = (key = {}) => {
   const provider = getProvider(key.provider);
   const model =
     typeof key.model === "string" && key.model.trim()
-      ? key.model
-      : provider.defaultModel;
+      ? key.model.trim()
+      : "";
 
   return {
     id: key.id || uid(),
     provider: provider.id,
     label: (key.label || provider.name).trim() || provider.name,
     apiKey: typeof key.apiKey === "string" ? key.apiKey : "",
-    // The old Groq default is no longer available on most plans.
-    model:
-      provider.id === "groq" && model === LEGACY_MODEL
-        ? provider.defaultModel
-        : model,
+    // Drop models the provider no longer serves so the chat asks for a
+    // replacement instead of failing on every request.
+    model: isUnavailableModel(provider.id, model) ? "" : model,
     endpoint: typeof key.endpoint === "string" ? key.endpoint : "",
     createdAt: key.createdAt || Date.now(),
   };

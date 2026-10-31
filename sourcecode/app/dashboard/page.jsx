@@ -97,8 +97,9 @@ export default function DashboardPage() {
               API keys
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-white/45">
-              Bring free-tier keys from multiple providers. Pick one active key
-              and Vexora will use its provider and model for every chat.
+              Bring free-tier keys from multiple providers. Model lists are
+              fetched live from each provider, so new free models appear without
+              updating Vexora.
             </p>
           </div>
           <button
@@ -124,7 +125,7 @@ export default function DashboardPage() {
           <Stat
             label="Free providers"
             value={freeProviders.length}
-            hint="Groq, Gemini, OpenRouter, Cerebras, Mistral"
+            hint="Models fetched live from official APIs"
           />
         </div>
 
@@ -199,7 +200,9 @@ export default function DashboardPage() {
         <section className="mt-12">
           <h2 className="text-lg font-medium">Free-tier providers</h2>
           <p className="mt-1 text-sm text-white/40">
-            Create a key with the provider, then add it above.
+            Create a key with the provider, then add it above. Free models are
+            detected live from each provider&apos;s official model list and
+            pricing data.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {freeProviders.map((provider) => (
@@ -222,28 +225,6 @@ export default function DashboardPage() {
                 <p className="mt-2 min-h-[2.5rem] text-xs leading-5 text-white/40">
                   {provider.description}
                 </p>
-                {provider.freeModels?.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-[10px] uppercase tracking-wide text-white/30">
-                      Free models
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {provider.freeModels.slice(0, 4).map((model) => (
-                        <span
-                          key={model.id}
-                          className="rounded-md bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/50"
-                        >
-                          {model.id}
-                        </span>
-                      ))}
-                      {provider.freeModels.length > 4 && (
-                        <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] text-white/40">
-                          +{provider.freeModels.length - 4} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
                   {provider.keyUrl ? (
                     <a
@@ -262,7 +243,7 @@ export default function DashboardPage() {
                       rel="noreferrer"
                       className="inline-block text-xs text-white/40 hover:text-white/70 hover:underline"
                     >
-                      Official pricing →
+                      Official models →
                     </a>
                   ) : null}
                 </div>

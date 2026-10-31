@@ -1,12 +1,14 @@
 import { assets } from "@/assets/assets";
+import ModelPicker from "@/components/ModelPicker";
 import {
+  describeProviderError,
   getKeyEndpoint,
   getKeyModel,
   getProvider,
+  isUnavailableModel,
 } from "@/config/providers";
 import { useAppContext } from "@/context/AppContext";
 import Image from "next/image";
-import Link from "next/link";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 
@@ -18,6 +20,7 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
     createNewChat,
     appendMessage,
     renameChat,
+    updateChat,
   } = useAppContext();
 
   const provider = activeKey ? getProvider(activeKey.provider) : null;
@@ -46,6 +49,14 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
     if (!endpoint) {
       return toast.error("This API key has no endpoint. Edit it in the dashboard.");
     }
+    if (!model) {
+      return toast.error("Choose a model below the chat box first.");
+    }
+    if (isUnavailableModel(activeKey.provider, model)) {
+      return toast.error(
+        "That model is no longer available. Pick another one below the chat box."
+      );
+    }
 
     setIsLoading(true);
     setPrompt("");
@@ -63,6 +74,10 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
     if (chat.name === "New Chat") {
       renameChat(chat.id, text.length > 40 ? `${text.slice(0, 40)}…` : text);
     }
+
+    let assistantId = null;
+    let streamed = "";
+    let reader = null;
 
     try {
       const history = [...chat.messages, userPrompt]
@@ -89,46 +104,121 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
         body: JSON.stringify({
           model,
           messages: history,
-          stream: false,
+          stream: true,
         }),
       });
 
       if (!response.ok) {
-        let detail = "";
+        let errorBody = null;
         try {
-          const errorBody = await response.json();
-          detail = errorBody.error?.message || errorBody.message || "";
+          errorBody = await response.json();
         } catch {
           // Response body was not JSON.
         }
 
-        const message =
-          detail || `${provider.name} request failed (${response.status})`;
-        if (response.status === 401 || response.status === 403) {
+        const message = describeProviderError(
+          provider.id,
+          response.status,
+          errorBody
+        );
+        if (response.status === 404 || /model/i.test(message)) {
+          throw new Error(`${message} Pick another model below the chat box.`);
+        }
+        if (
+          provider.id !== "gemini" &&
+          (response.status === 401 || response.status === 403)
+        ) {
           throw new Error(
             `${message} Check the key in the API keys dashboard.`
-          );
-        }
-        if (response.status === 404 || /model/i.test(message)) {
-          throw new Error(
-            `${message} Open the API keys dashboard and use "Load models" to pick an available model.`
           );
         }
         throw new Error(message);
       }
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content?.trim();
-      if (!content) {
-        throw new Error(`${provider.name} returned an empty response`);
-      }
-
-      appendMessage(chat.id, {
+      // Show the assistant bubble immediately and grow it as tokens arrive,
+      // so slow reasoning models still feel responsive.
+      const assistant = appendMessage(chat.id, {
         role: "assistant",
-        content,
+        content: "",
         timestamp: Date.now(),
       });
+      assistantId = assistant.id;
+
+      const addDelta = (text) => {
+        if (!text) return;
+        streamed += text;
+        updateChat(chat.id, (current) => ({
+          ...current,
+          messages: current.messages.map((message) =>
+            message.id === assistantId
+              ? { ...message, content: streamed }
+              : message
+          ),
+        }));
+      };
+
+      const consumeLine = (rawLine) => {
+        const line = rawLine.trim();
+        if (!line.startsWith("data:")) return;
+
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") return;
+
+        let event;
+        try {
+          event = JSON.parse(payload);
+        } catch {
+          return;
+        }
+
+        if (event.error) {
+          throw new Error(
+            describeProviderError(provider.id, event.error.code || 500, event)
+          );
+        }
+
+        const delta = event.choices?.[0]?.delta?.content;
+        if (typeof delta === "string") addDelta(delta);
+      };
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (response.body && /text\/event-stream/i.test(contentType)) {
+        reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() || "";
+          lines.forEach(consumeLine);
+        }
+
+        buffer += decoder.decode();
+        if (buffer.trim()) consumeLine(buffer);
+      } else {
+        // Some OpenAI-compatible endpoints ignore `stream` and return JSON.
+        const data = await response.json();
+        addDelta(data.choices?.[0]?.message?.content || "");
+      }
+
+      if (!streamed.trim()) {
+        throw new Error(`${provider.name} returned an empty response`);
+      }
     } catch (error) {
+      if (reader) reader.cancel().catch(() => {});
+      if (assistantId && !streamed.trim()) {
+        updateChat(chat.id, (current) => ({
+          ...current,
+          messages: current.messages.filter(
+            (message) => message.id !== assistantId
+          ),
+        }));
+      }
       toast.error(
         error.message || `Could not reach ${provider?.name || "the provider"}`
       );
@@ -154,28 +244,10 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
       />
 
       <div className="flex items-center justify-between gap-3 text-sm">
-        <Link
-          href="/dashboard"
-          className="flex min-w-0 items-center gap-1.5 text-xs text-white/40 transition hover:text-white/70"
-        >
-          {activeKey ? (
-            <>
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: provider.accent }}
-              />
-              <span className="truncate">
-                {provider.name} · {model}
-              </span>
-            </>
-          ) : (
-            <span className="truncate text-amber-300/70">
-              No API key — add one in the dashboard
-            </span>
-          )}
-        </Link>
+        <ModelPicker />
 
         <button
+          type="submit"
           className={`${prompt ? "bg-primary" : "bg-[#71717a]"} shrink-0 rounded-full p-2 cursor-pointer`}
         >
           <Image

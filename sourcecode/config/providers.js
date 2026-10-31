@@ -1,56 +1,7 @@
-// Official free-tier Gemini text models.
-// Source: https://ai.google.dev/gemini-api/docs/pricing (updated 2026-10-28)
-// Only models whose Standard tier shows "Free of charge" for input/output are
-// listed. Live, TTS, transcription and image models are excluded because the
-// chat UI only sends text.
-export const GEMINI_FREE_MODELS = [
-  {
-    id: "gemini-3.8-flash",
-    label: "Gemini 3.8 Flash",
-    note: "Newest Flash, best free all-rounder",
-  },
-  {
-    id: "gemini-3.6-flash",
-    label: "Gemini 3.6 Flash",
-    note: "Previous Flash, fast and multimodal",
-  },
-  {
-    id: "gemini-3.5-flash-lite",
-    label: "Gemini 3.5 Flash-Lite",
-    note: "High-volume, low-latency tasks",
-  },
-  {
-    id: "gemini-3.1-flash-lite",
-    label: "Gemini 3.1 Flash-Lite",
-    note: "Lightweight everyday prompts",
-  },
-  {
-    id: "gemini-3-flash-preview",
-    label: "Gemini 3 Flash Preview",
-    note: "Preview build of Gemini 3 Flash",
-  },
-  {
-    id: "gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    note: "Older Pro reasoning model",
-  },
-  {
-    id: "gemini-2.5-flash",
-    label: "Gemini 2.5 Flash",
-    note: "Previous-generation Flash",
-  },
-  {
-    id: "gemini-2.5-flash-lite",
-    label: "Gemini 2.5 Flash-Lite",
-    note: "Previous-generation Lite",
-  },
-];
+// Providers use OpenAI-compatible chat endpoints. Model lists and free-tier
+// eligibility are discovered at runtime, so new or retired models do not need
+// code changes.
 
-export const GEMINI_FREE_MODEL_IDS = GEMINI_FREE_MODELS.map(
-  (model) => model.id
-);
-
-// Free-tier friendly providers with OpenAI-compatible chat endpoints.
 export const PROVIDERS = [
   {
     id: "groq",
@@ -58,41 +9,46 @@ export const PROVIDERS = [
     description: "Very fast Llama, GPT-OSS and Qwen models with a free tier.",
     endpoint: "https://api.groq.com/openai/v1/chat/completions",
     modelsUrl: "https://api.groq.com/openai/v1/models",
-    defaultModel: "openai/gpt-oss-120b",
     keyUrl: "https://console.groq.com/keys",
     keyHint: "gsk_...",
+    keyPattern: /^gsk_[A-Za-z0-9]{20,}$/,
     freeTier: "Free tier",
     accent: "#F55036",
+    docsUrl: "https://console.groq.com/docs/models",
   },
   {
     id: "gemini",
     name: "Google Gemini",
     description:
-      "Google AI Studio free tier. These models are free of charge per Google's pricing page.",
+      "Google AI Studio free tier. Free models come from Google's official pricing page.",
     endpoint:
       "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     modelsUrl: "https://generativelanguage.googleapis.com/v1beta/models",
     modelsAuth: "query",
-    defaultModel: "gemini-3.8-flash",
-    models: GEMINI_FREE_MODEL_IDS,
-    freeModels: GEMINI_FREE_MODELS,
-    docsUrl: "https://ai.google.dev/gemini-api/docs/pricing",
     keyUrl: "https://aistudio.google.com/app/apikey",
     keyHint: "AIza...",
+    keyPattern: /^AIza[0-9A-Za-z_-]{35}$/,
     freeTier: "Free tier",
     accent: "#4285F4",
+    // Google's /models API does not expose price/free-tier data, so the
+    // official pricing page is parsed by /api/free-models.
+    freeFilter: "gemini-docs",
+    docsUrl: "https://ai.google.dev/gemini-api/docs/pricing",
   },
   {
     id: "openrouter",
     name: "OpenRouter",
-    description: "One key for many models, including free :free variants.",
+    description:
+      "One key for many models. Free models are detected from live pricing data.",
     endpoint: "https://openrouter.ai/api/v1/chat/completions",
     modelsUrl: "https://openrouter.ai/api/v1/models",
-    defaultModel: "meta-llama/llama-3.3-70b-instruct:free",
     keyUrl: "https://openrouter.ai/keys",
     keyHint: "sk-or-v1-...",
+    keyPattern: /^sk-or-v1-[0-9a-f]{20,}$/i,
     freeTier: "Free models",
     accent: "#8B5CF6",
+    freeFilter: "openrouter-pricing",
+    docsUrl: "https://openrouter.ai/models?max_price=0",
   },
   {
     id: "cerebras",
@@ -100,11 +56,12 @@ export const PROVIDERS = [
     description: "Extremely fast inference with a free developer tier.",
     endpoint: "https://api.cerebras.ai/v1/chat/completions",
     modelsUrl: "https://api.cerebras.ai/v1/models",
-    defaultModel: "llama-3.3-70b",
     keyUrl: "https://cloud.cerebras.ai",
     keyHint: "csk-...",
+    keyPattern: /^csk-[A-Za-z0-9_-]{20,}$/,
     freeTier: "Free tier",
     accent: "#FF6B35",
+    docsUrl: "https://inference-docs.cerebras.ai/models/overview",
   },
   {
     id: "mistral",
@@ -112,11 +69,12 @@ export const PROVIDERS = [
     description: "Mistral's free experiment tier for small and large models.",
     endpoint: "https://api.mistral.ai/v1/chat/completions",
     modelsUrl: "https://api.mistral.ai/v1/models",
-    defaultModel: "mistral-small-latest",
     keyUrl: "https://console.mistral.ai/api-keys",
     keyHint: "Your Mistral API key",
+    keyPattern: /^[A-Za-z0-9_-]{24,}$/,
     freeTier: "Free tier",
     accent: "#FF7000",
+    docsUrl: "https://docs.mistral.ai/getting-started/models/models_overview/",
   },
   {
     id: "custom",
@@ -124,7 +82,6 @@ export const PROVIDERS = [
     description: "Any OpenAI-compatible chat completions endpoint.",
     endpoint: "",
     modelsUrl: "",
-    defaultModel: "",
     keyUrl: "",
     keyHint: "sk-...",
     freeTier: "Custom",
@@ -133,6 +90,24 @@ export const PROVIDERS = [
 ];
 
 const CUSTOM_PROVIDER = PROVIDERS[PROVIDERS.length - 1];
+
+// Models that a provider still advertises (or still lists on its pricing page)
+// but no longer serves to API keys. They are hidden from every model list so a
+// chat can never select a dead model. Keep this list small and explicit; every
+// other model comes from the provider's live endpoint.
+//
+// Gemini 2.5 Pro/Flash/Flash-Lite remain on Google's pricing page but return
+// "model not found" for new keys.
+const UNAVAILABLE_MODEL_PATTERNS = {
+  gemini: [/^gemini-2\.5-(pro|flash|flash-lite)(-\d+)?$/i],
+};
+
+export const isUnavailableModel = (providerId, modelId) => {
+  const patterns = UNAVAILABLE_MODEL_PATTERNS[providerId];
+  if (!patterns) return false;
+  const id = (modelId || "").trim();
+  return patterns.some((pattern) => pattern.test(id));
+};
 
 export const getProvider = (id) =>
   PROVIDERS.find((provider) => provider.id === id) || CUSTOM_PROVIDER;
@@ -145,24 +120,69 @@ export const getKeyEndpoint = (key) => {
 
 export const getKeyModel = (key) => {
   if (!key) return "";
-  const provider = getProvider(key.provider);
-  return (key.model || provider.defaultModel || "").trim();
+  return (key.model || "").trim();
 };
 
-// Models documented by the provider as free-tier eligible. They are offered
-// before calling the provider's /models endpoint, so a new key can be used
-// immediately.
-export const getPresetModels = (providerId) => {
+// Used only to decide when it is safe to auto-fetch models while the user is
+// still typing a key. Manual "Refresh models" still accepts any value.
+export const isLikelyKey = (providerId, value) => {
   const provider = getProvider(providerId);
-  return Array.isArray(provider.models) ? provider.models : [];
+  const key = (value || "").trim();
+  if (!key) return false;
+  return provider.keyPattern
+    ? provider.keyPattern.test(key)
+    : key.length >= 8;
 };
 
-export const getFreeModels = (providerId) => {
-  const provider = getProvider(providerId);
-  return Array.isArray(provider.freeModels) ? provider.freeModels : [];
+// Google returns the reason for a rejected key in error.details, and the
+// OpenAI-compatible endpoint wraps errors in an array. Without this the UI
+// would only show "request failed (400)".
+const GEMINI_KEY_HINTS = {
+  API_KEY_INVALID:
+    "Create a new key at https://aistudio.google.com/app/apikey and paste it again.",
+  API_KEY_HTTP_REFERRER_BLOCKED:
+    "This key is restricted to other websites. In Google Cloud Console either allow http://localhost:3000 or remove the website restriction.",
+  API_KEY_IP_ADDRESS_BLOCKED:
+    "This key is restricted to specific IP addresses, so it cannot be used from the browser.",
+  API_KEY_SERVICE_BLOCKED:
+    "This key is restricted to other APIs. Allow the Generative Language API for this key.",
+  API_KEY_EXPIRED:
+    "This key has expired. Create a new key in Google AI Studio.",
+  SERVICE_DISABLED:
+    "The Generative Language API is disabled for this key's project. Enable it in Google Cloud Console.",
+  PERMISSION_DENIED:
+    "Google denied the request for this key. Check its API and website restrictions.",
+  RESOURCE_EXHAUSTED:
+    "The free-tier quota for this key is used up. Wait for it to reset or pick another model.",
 };
 
-const NON_CHAT_MODEL = /whisper|orpheus|guard|tts|ocr|moderation|embed/i;
+export const describeProviderError = (providerId, status, data) => {
+  const error = Array.isArray(data) ? data[0]?.error : data?.error;
+  const message = (error?.message || data?.message || "").trim();
+  const reason =
+    error?.details?.find((detail) => detail?.reason)?.reason ||
+    (/valid api key/i.test(message) ? "API_KEY_INVALID" : "");
+
+  if (providerId === "gemini") {
+    if (GEMINI_KEY_HINTS[reason]) {
+      return `${message || "Google rejected the request."} ${GEMINI_KEY_HINTS[reason]}`;
+    }
+    if (status === 429) {
+      return `${message || "Google rate-limited this key."} ${
+        GEMINI_KEY_HINTS.RESOURCE_EXHAUSTED
+      }`;
+    }
+  }
+
+  if (message) return message;
+  if (status === 429) {
+    return "Rate limit reached. Wait a moment or pick another model.";
+  }
+  return `${getProvider(providerId).name} request failed (${status}).`;
+};
+
+const NON_CHAT_MODEL =
+  /whisper|orpheus|guard|tts|ocr|moderation|embed|rerank|audio|realtime|transcribe|lyria|music|speech|dall-e|gpt-image|imagen|veo|sora|kling|runway|flux|stable-diffusion/i;
 
 const deriveModelsUrl = (endpoint) => {
   const trimmed = (endpoint || "").trim();
@@ -170,7 +190,10 @@ const deriveModelsUrl = (endpoint) => {
 
   try {
     const url = new URL(trimmed);
-    url.pathname = url.pathname.replace(/\/chat\/completions\/?$/, "/models");
+    url.pathname = url.pathname.replace(
+      /\/chat\/completions\/?$/,
+      "/models"
+    );
     return url.pathname.endsWith("/models") ? url.toString() : "";
   } catch {
     return "";
@@ -183,51 +206,127 @@ export const getModelsUrl = (providerId, endpoint) => {
   return deriveModelsUrl(endpoint);
 };
 
-const normalizeModels = (providerId, data) => {
+// Google's model API does not report pricing. This endpoint parses the
+// official pricing page on the server (CORS-safe) and returns the text models
+// whose pricing table says "Free of charge".
+export async function fetchOfficialFreeModelIds(providerId) {
+  const response = await fetch(
+    `/api/free-models?provider=${encodeURIComponent(providerId)}`,
+    { cache: "no-store" }
+  );
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || "Could not load the provider's official free-tier list."
+    );
+  }
+  if (!Array.isArray(data.models) || data.models.length === 0) {
+    throw new Error(
+      data.warning ||
+        "The provider's official free-tier list is empty right now."
+    );
+  }
+
+  return new Set(data.models);
+}
+
+const extractEntries = (data) => {
   const list = Array.isArray(data.data)
     ? data.data
     : Array.isArray(data.models)
       ? data.models
       : [];
 
-  const entries = list
+  return list
     .map((item) =>
-      typeof item === "string" ? { id: item } : { ...item, id: item.id || item.name }
+      typeof item === "string"
+        ? { id: item }
+        : { ...item, id: item.id || item.name }
     )
     .filter((item) => item.id);
-
-  let ids = entries.map((item) => String(item.id));
-
-  if (providerId === "gemini") {
-    ids = entries
-      .filter(
-        (item) =>
-          !item.supportedGenerationMethods ||
-          item.supportedGenerationMethods.includes("generateContent")
-      )
-      .map((item) => String(item.id).replace(/^models\//, ""));
-  }
-
-  if (providerId === "openrouter") {
-    const free = entries.filter(
-      (item) =>
-        String(item.id).endsWith(":free") ||
-        Number(item.pricing?.prompt) === 0
-    );
-    if (free.length > 0) ids = free.map((item) => String(item.id));
-  }
-
-  if (providerId === "groq") {
-    ids = ids.filter((id) => !NON_CHAT_MODEL.test(id));
-  }
-
-  return [...new Set(ids)].sort();
 };
 
-export const pickDefaultModel = (providerId, ids) => {
-  const provider = getProvider(providerId);
-  if (ids.includes(provider.defaultModel)) return provider.defaultModel;
-  return ids[0] || provider.defaultModel;
+// Auto-selection order: free models first, then the lowest-latency family, then
+// the newest version. This keeps a new key from defaulting to a heavy
+// reasoning model such as Gemini 3.8 Flash when a Flash-Lite model is available.
+const hasModelToken = (model, words) =>
+  words.some((word) =>
+    new RegExp(`(^|[-_/])${word}($|[-_/])`).test(model)
+  );
+
+const modelSpeedRank = (id) => {
+  const model = id.toLowerCase();
+  if (hasModelToken(model, ["reasoning", "thinking"])) return 4;
+  if (hasModelToken(model, ["lite", "mini", "nano", "small"])) return 0;
+  if (hasModelToken(model, ["preview", "experimental", "exp"])) return 3;
+  if (hasModelToken(model, ["flash", "turbo", "instant", "fast"])) return 2;
+  if (hasModelToken(model, ["pro", "opus", "large", "max"])) return 4;
+  return 3;
+};
+
+const modelVersion = (id) => {
+  const model = id.includes("/") ? id.slice(id.lastIndexOf("/") + 1) : id;
+  const match = model.match(/(\d+)(?:\.(\d+))?/);
+  return match ? Number(match[1]) * 100 + Number(match[2] || 0) : 0;
+};
+
+const compareModels = (a, b) => {
+  const freeDelta = Number(b.free === true) - Number(a.free === true);
+  if (freeDelta !== 0) return freeDelta;
+
+  const speedDelta = modelSpeedRank(a.id) - modelSpeedRank(b.id);
+  if (speedDelta !== 0) return speedDelta;
+
+  const versionDelta = modelVersion(b.id) - modelVersion(a.id);
+  if (versionDelta !== 0) return versionDelta;
+
+  return a.id.localeCompare(b.id);
+};
+
+const normalizeModels = (providerId, data, freeIds) => {
+  const entries = extractEntries(data);
+  const models = [];
+
+  for (const item of entries) {
+    let id = String(item.id);
+
+    if (providerId === "gemini") {
+      if (
+        item.supportedGenerationMethods &&
+        !item.supportedGenerationMethods.includes("generateContent")
+      ) {
+        continue;
+      }
+      id = id.replace(/^models\//, "");
+    }
+
+    if (NON_CHAT_MODEL.test(id)) continue;
+    if (isUnavailableModel(providerId, id)) continue;
+
+    let free = null;
+    if (providerId === "gemini" && freeIds) {
+      free = freeIds.has(id);
+    } else if (providerId === "openrouter") {
+      free =
+        id.endsWith(":free") ||
+        Number(item.pricing?.prompt) === 0 ||
+        Number(item.pricing?.completion) === 0;
+    }
+
+    models.push({ id, free });
+  }
+
+  // Dedupe while keeping the provider's order, then put free models first.
+  const unique = [];
+  const seen = new Set();
+  for (const model of models) {
+    if (seen.has(model.id)) continue;
+    seen.add(model.id);
+    unique.push(model);
+  }
+
+  return unique.sort(compareModels);
 };
 
 export async function fetchProviderModels(providerId, apiKey, endpoint) {
@@ -258,19 +357,36 @@ export async function fetchProviderModels(providerId, apiKey, endpoint) {
 
   let response;
   try {
-    response = await fetch(url.toString(), { headers });
+    response = await fetch(url.toString(), { headers, cache: "no-store" });
   } catch {
     throw new Error("Could not reach the provider. Check the endpoint URL.");
   }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(
-      data.error?.message ||
-        data.message ||
-        `${provider.name} could not list models (${response.status}).`
-    );
+    throw new Error(describeProviderError(providerId, response.status, data));
   }
 
-  return normalizeModels(providerId, data);
+  let freeIds = null;
+  let warning = "";
+  let freeFilterApplied = provider.freeFilter === "openrouter-pricing";
+
+  if (provider.freeFilter === "gemini-docs") {
+    try {
+      freeIds = await fetchOfficialFreeModelIds(providerId);
+      freeFilterApplied = true;
+    } catch (error) {
+      warning = `${error.message} Showing all models this key can access.`;
+    }
+  }
+
+  const models = normalizeModels(providerId, data, freeIds);
+
+  return {
+    models,
+    freeFilterApplied,
+    warning,
+    source: provider.docsUrl || modelsUrl,
+    fetchedAt: Date.now(),
+  };
 }
