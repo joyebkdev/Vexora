@@ -18,6 +18,9 @@ multiple providers:
   the active key, provider and model.
 - **Model discovery** - **Load models** asks the provider which models the key
   can use, avoiding "model does not exist" errors.
+- **Official Gemini free models** - Gemini's free-tier text models are built in
+  (Gemini 3.8 Flash, 3.6 Flash, 3.5/3.1 Flash-Lite, 2.5 Pro/Flash), so they can
+  be picked without loading anything.
 - **Chats that persist locally** - reload the page and conversations remain.
 - **Multiple chats** - create, rename, delete and switch between conversations.
 - **Markdown + code highlighting** - rendered with `react-markdown` and Prism.
@@ -50,8 +53,9 @@ multiple providers:
 3. Open http://localhost:3000
 
 4. Open **API keys** in the sidebar (or http://localhost:3000/dashboard), pick a
-   free-tier provider, paste a key and click **Add key**. Use **Load models** to
-   see which models that key can access.
+   free-tier provider, paste a key and click **Add key**. Gemini shows the
+   official free-tier models as one-click presets; use **Load models** for any
+   other provider to see what that key can access.
 
 5. Start chatting. The first message becomes the chat title automatically.
 
@@ -109,6 +113,9 @@ vexora/
 - Private/incognito mode may discard storage when the window closes.
 - **Load models** is provider-aware: it filters Groq's non-chat models, Gemini's
   non-text models, and OpenRouter's paid models where possible.
+- Gemini's built-in list comes from the official pricing page
+  (https://ai.google.dev/gemini-api/docs/pricing). Gemini 4 Argon and Gemini 3.1
+  Pro Preview are **not** on the free tier and are intentionally excluded.
 - Some model names are plan-specific, so always prefer the loaded list if a
   request reports that the model does not exist.
 

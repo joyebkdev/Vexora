@@ -1,3 +1,55 @@
+// Official free-tier Gemini text models.
+// Source: https://ai.google.dev/gemini-api/docs/pricing (updated 2026-10-28)
+// Only models whose Standard tier shows "Free of charge" for input/output are
+// listed. Live, TTS, transcription and image models are excluded because the
+// chat UI only sends text.
+export const GEMINI_FREE_MODELS = [
+  {
+    id: "gemini-3.8-flash",
+    label: "Gemini 3.8 Flash",
+    note: "Newest Flash, best free all-rounder",
+  },
+  {
+    id: "gemini-3.6-flash",
+    label: "Gemini 3.6 Flash",
+    note: "Previous Flash, fast and multimodal",
+  },
+  {
+    id: "gemini-3.5-flash-lite",
+    label: "Gemini 3.5 Flash-Lite",
+    note: "High-volume, low-latency tasks",
+  },
+  {
+    id: "gemini-3.1-flash-lite",
+    label: "Gemini 3.1 Flash-Lite",
+    note: "Lightweight everyday prompts",
+  },
+  {
+    id: "gemini-3-flash-preview",
+    label: "Gemini 3 Flash Preview",
+    note: "Preview build of Gemini 3 Flash",
+  },
+  {
+    id: "gemini-2.5-pro",
+    label: "Gemini 2.5 Pro",
+    note: "Older Pro reasoning model",
+  },
+  {
+    id: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    note: "Previous-generation Flash",
+  },
+  {
+    id: "gemini-2.5-flash-lite",
+    label: "Gemini 2.5 Flash-Lite",
+    note: "Previous-generation Lite",
+  },
+];
+
+export const GEMINI_FREE_MODEL_IDS = GEMINI_FREE_MODELS.map(
+  (model) => model.id
+);
+
 // Free-tier friendly providers with OpenAI-compatible chat endpoints.
 export const PROVIDERS = [
   {
@@ -15,12 +67,16 @@ export const PROVIDERS = [
   {
     id: "gemini",
     name: "Google Gemini",
-    description: "Google AI Studio free tier via the OpenAI-compatible API.",
+    description:
+      "Google AI Studio free tier. These models are free of charge per Google's pricing page.",
     endpoint:
       "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     modelsUrl: "https://generativelanguage.googleapis.com/v1beta/models",
     modelsAuth: "query",
-    defaultModel: "gemini-2.5-flash",
+    defaultModel: "gemini-3.8-flash",
+    models: GEMINI_FREE_MODEL_IDS,
+    freeModels: GEMINI_FREE_MODELS,
+    docsUrl: "https://ai.google.dev/gemini-api/docs/pricing",
     keyUrl: "https://aistudio.google.com/app/apikey",
     keyHint: "AIza...",
     freeTier: "Free tier",
@@ -91,6 +147,19 @@ export const getKeyModel = (key) => {
   if (!key) return "";
   const provider = getProvider(key.provider);
   return (key.model || provider.defaultModel || "").trim();
+};
+
+// Models documented by the provider as free-tier eligible. They are offered
+// before calling the provider's /models endpoint, so a new key can be used
+// immediately.
+export const getPresetModels = (providerId) => {
+  const provider = getProvider(providerId);
+  return Array.isArray(provider.models) ? provider.models : [];
+};
+
+export const getFreeModels = (providerId) => {
+  const provider = getProvider(providerId);
+  return Array.isArray(provider.freeModels) ? provider.freeModels : [];
 };
 
 const NON_CHAT_MODEL = /whisper|orpheus|guard|tts|ocr|moderation|embed/i;

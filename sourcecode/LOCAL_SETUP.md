@@ -71,6 +71,9 @@ or use "Clear site data" in the browser.
 - Groq: default model is `openai/gpt-oss-120b`; Llama 3.3 70B is Enterprise-only
   on Groq, so prefer the loaded list.
 - OpenRouter: only `:free`/zero-cost models are listed when available.
-- Gemini: the dashboard lists models that support `generateContent`.
+- Gemini: the dashboard lists Google's official free-tier text models
+  (https://ai.google.dev/gemini-api/docs/pricing), including Gemini 3.8 Flash,
+  3.6 Flash, 3.5/3.1 Flash-Lite and 2.5 Pro/Flash. Paid-only models such as
+  Gemini 4 Argon and Gemini 3.1 Pro Preview are excluded.
 - Each key is sent only to the provider that owns it. Custom keys use the
   endpoint you enter.

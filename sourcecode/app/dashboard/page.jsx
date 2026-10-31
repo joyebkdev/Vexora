@@ -222,16 +222,50 @@ export default function DashboardPage() {
                 <p className="mt-2 min-h-[2.5rem] text-xs leading-5 text-white/40">
                   {provider.description}
                 </p>
-                {provider.keyUrl ? (
-                  <a
-                    href={provider.keyUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-block text-xs text-primary hover:underline"
-                  >
-                    Get a free key →
-                  </a>
-                ) : null}
+                {provider.freeModels?.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] uppercase tracking-wide text-white/30">
+                      Free models
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {provider.freeModels.slice(0, 4).map((model) => (
+                        <span
+                          key={model.id}
+                          className="rounded-md bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/50"
+                        >
+                          {model.id}
+                        </span>
+                      ))}
+                      {provider.freeModels.length > 4 && (
+                        <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] text-white/40">
+                          +{provider.freeModels.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {provider.keyUrl ? (
+                    <a
+                      href={provider.keyUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block text-xs text-primary hover:underline"
+                    >
+                      Get a free key →
+                    </a>
+                  ) : null}
+                  {provider.docsUrl ? (
+                    <a
+                      href={provider.docsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block text-xs text-white/40 hover:text-white/70 hover:underline"
+                    >
+                      Official pricing →
+                    </a>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>

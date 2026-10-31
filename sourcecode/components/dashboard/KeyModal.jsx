@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import {
   PROVIDERS,
   fetchProviderModels,
+  getFreeModels,
+  getPresetModels,
   getProvider,
   pickDefaultModel,
 } from "@/config/providers";
@@ -28,6 +30,9 @@ const KeyModal = ({ open, initial, onClose, onSave }) => {
 
   const provider = getProvider(form.provider);
   const isCustom = form.provider === "custom";
+  const presetModels = getPresetModels(form.provider);
+  const freeModels = getFreeModels(form.provider);
+  const modelOptions = [...new Set([...models, ...presetModels])];
 
   useEffect(() => {
     if (!open) return;
@@ -308,19 +313,60 @@ const KeyModal = ({ open, initial, onClose, onSave }) => {
               className="mt-1.5 w-full rounded-xl bg-[#404045] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
             />
             <datalist id="key-model-options">
-              {models.map((model) => (
+              {modelOptions.map((model) => (
                 <option key={model} value={model} />
               ))}
             </datalist>
+
+            {freeModels.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-white/55">
+                  Official free-tier models
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {freeModels.map((model) => {
+                    const selected = form.model === model.id;
+                    return (
+                      <button
+                        key={model.id}
+                        type="button"
+                        title={model.note}
+                        onClick={() => setField("model", model.id)}
+                        className={`rounded-lg border px-2 py-1 text-[11px] transition ${
+                          selected
+                            ? "border-primary bg-primary/20 text-white"
+                            : "border-white/10 bg-white/5 text-white/55 hover:border-white/25 hover:text-white"
+                        }`}
+                      >
+                        {model.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {provider.docsUrl && (
+                  <a
+                    href={provider.docsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-block text-[11px] text-primary hover:underline"
+                  >
+                    Official free-tier pricing →
+                  </a>
+                )}
+              </div>
+            )}
+
             {error ? (
               <p className="mt-2 text-xs text-red-400">{error}</p>
             ) : (
               <p className="mt-2 text-xs text-white/40">
                 {models.length > 0
-                  ? `${models.length} models available to this key.`
-                  : provider.id === "openrouter"
-                    ? "Load models to pick a free model."
-                    : "Use Load models to see what this key can access."}
+                  ? `${models.length} models returned by this key.`
+                  : freeModels.length > 0
+                    ? "Pick one of the free models listed, or load models to see everything this key can access."
+                    : provider.id === "openrouter"
+                      ? "Load models to pick a free model."
+                      : "Use Load models to see what this key can access."}
               </p>
             )}
           </div>
