@@ -7,6 +7,7 @@ import {
   getProvider,
   isUnavailableModel,
 } from "@/config/providers";
+import { withLanguageRule, needsLanguageRetry } from "@/config/language";
 import { useAppContext } from "@/context/AppContext";
 import Image from "next/image";
 import React, { useState } from "react";
@@ -76,19 +77,35 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
     }
 
     let assistantId = null;
-    let streamed = "";
     let reader = null;
+    let displayed = "";
 
-    try {
-      const history = [...chat.messages, userPrompt]
-        .filter(
-          (message) =>
-            message.content &&
-            (message.role === "user" || message.role === "assistant")
-        )
-        .slice(-20)
-        .map(({ role, content }) => ({ role, content }));
+    // Show the assistant bubble immediately and grow it as tokens arrive, so
+    // slow reasoning models still feel responsive.
+    const ensureAssistantBubble = () => {
+      if (assistantId) return assistantId;
+      const assistant = appendMessage(chat.id, {
+        role: "assistant",
+        content: "",
+        timestamp: Date.now(),
+      });
+      assistantId = assistant.id;
+      return assistantId;
+    };
 
+    const setAssistantText = (content) => {
+      displayed = content;
+      updateChat(chat.id, (current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === assistantId ? { ...message, content } : message
+        ),
+      }));
+    };
+
+    // One streaming request. Kept separate so an answer in the wrong language
+    // can be retried without duplicating the fetch/stream handling.
+    const runCompletion = async (requestMessages) => {
       const headers = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${activeKey.apiKey.trim()}`,
@@ -103,7 +120,7 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
         headers,
         body: JSON.stringify({
           model,
-          messages: history,
+          messages: requestMessages,
           stream: true,
         }),
       });
@@ -135,26 +152,13 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
         throw new Error(message);
       }
 
-      // Show the assistant bubble immediately and grow it as tokens arrive,
-      // so slow reasoning models still feel responsive.
-      const assistant = appendMessage(chat.id, {
-        role: "assistant",
-        content: "",
-        timestamp: Date.now(),
-      });
-      assistantId = assistant.id;
+      ensureAssistantBubble();
 
+      let streamed = "";
       const addDelta = (text) => {
         if (!text) return;
         streamed += text;
-        updateChat(chat.id, (current) => ({
-          ...current,
-          messages: current.messages.map((message) =>
-            message.id === assistantId
-              ? { ...message, content: streamed }
-              : message
-          ),
-        }));
+        setAssistantText(streamed);
       };
 
       const consumeLine = (rawLine) => {
@@ -209,9 +213,33 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
       if (!streamed.trim()) {
         throw new Error(`${provider.name} returned an empty response`);
       }
+
+      return streamed;
+    };
+
+    try {
+      const history = [...chat.messages, userPrompt]
+        .filter(
+          (message) =>
+            message.content &&
+            (message.role === "user" || message.role === "assistant")
+        )
+        .slice(-20)
+        .map(({ role, content }) => ({ role, content }));
+
+      const reply = await runCompletion(withLanguageRule(history, text));
+
+      // Arabic-first models such as Groq's allam-2-7b can ignore the system
+      // rule. Retry once with it repeated instead of showing Arabic to a user
+      // who wrote English.
+      if (needsLanguageRetry(text, reply)) {
+        reader = null;
+        setAssistantText("");
+        await runCompletion(withLanguageRule(history, text, true));
+      }
     } catch (error) {
       if (reader) reader.cancel().catch(() => {});
-      if (assistantId && !streamed.trim()) {
+      if (assistantId && !displayed.trim()) {
         updateChat(chat.id, (current) => ({
           ...current,
           messages: current.messages.filter(

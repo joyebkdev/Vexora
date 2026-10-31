@@ -33,6 +33,10 @@ multiple providers:
 - **Fast defaults + streaming** - free lists put Flash-Lite/Mini models first so
   a new key does not default to a heavy reasoning model, and replies stream
   token by token instead of waiting for the full answer.
+- **Replies in your language** - every request tells the model to answer in the
+  language you wrote in. Arabic-first models such as Groq's `allam-2-7b` can
+  ignore that rule, so a mostly-Arabic answer to an English message is retried
+  once with the rule repeated.
 - **Chats that persist locally** - reload the page and conversations remain.
 - **Multiple chats** - create, rename, delete and switch between conversations.
 - **Markdown + code highlighting** - rendered with `react-markdown` and Prism.
