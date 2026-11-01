@@ -113,6 +113,15 @@ const ModelPicker = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activeKey?.id]);
 
+  // A saved selection can be cleared when its model is retired or hidden.
+  // Fetch once in that case so a working model is selected automatically
+  // instead of leaving the chat without a model until the picker is opened.
+  useEffect(() => {
+    if (!activeKey || getKeyModel(activeKey)) return;
+    loadModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey?.id]);
+
   // Reset the cached list when the active key changes.
   useEffect(() => {
     setModels([]);

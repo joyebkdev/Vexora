@@ -98,8 +98,13 @@ const CUSTOM_PROVIDER = PROVIDERS[PROVIDERS.length - 1];
 //
 // Gemini 2.5 Pro/Flash/Flash-Lite remain on Google's pricing page but return
 // "model not found" for new keys.
+//
+// OpenRouter's Gemma 4 free endpoints repeatedly answer a plain "hi" with
+// "Provider returned error" from Google AI Studio, so both the 26B and 31B
+// variants are hidden instead of failing in the chat.
 const UNAVAILABLE_MODEL_PATTERNS = {
   gemini: [/^gemini-2\.5-(pro|flash|flash-lite)(-\d+)?$/i],
+  openrouter: [/^google\/gemma-4-/i],
 };
 
 export const isUnavailableModel = (providerId, modelId) => {

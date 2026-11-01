@@ -96,7 +96,9 @@ or use "Clear site data" in the browser.
   zero-price metadata. Free models whose published endpoint is down
   (`status < 0` or uptime below 50%) are hidden until it recovers, and
   non-chat entries such as `nvidia/nemotron-3.5-content-safety` and
-  `scaledown/extract` are filtered out. OpenRouter sometimes returns a provider
+  `scaledown/extract` are filtered out. The Gemma 4 26B/31B models are hidden
+  (`UNAVAILABLE_MODEL_PATTERNS`) because Google AI Studio keeps answering them
+  with "Provider returned error". OpenRouter sometimes returns a provider
   error inside a `200` response; Vexora reads that as an error and retries
   transient failures once instead of showing "empty response".
 - Gemini: Google's `/models` API has no pricing data, so Vexora parses the

@@ -30,7 +30,9 @@ multiple providers:
   remembers your choice.
 - **Retired model filter** - models the provider no longer serves (for example
   Gemini 2.5 Pro/Flash/Flash-Lite) are hidden, and a saved selection is cleared
-  so the chat asks for a working model instead of failing.
+  so the chat asks for a working model instead of failing. OpenRouter's two
+  Gemma 4 models are hidden too because their free endpoints keep returning
+  upstream provider errors.
 - **Fast defaults + streaming** - free lists put Flash-Lite/Mini models first so
   a new key does not default to a heavy reasoning model, and replies stream
   token by token instead of waiting for the full answer.
