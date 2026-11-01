@@ -86,10 +86,16 @@ const ModelPicker = () => {
       setFreeOnly(result.freeFilterApplied);
       if (result.models.length === 0) {
         setError("No chat models were returned for this key.");
-      } else if (!getKeyModel(activeKey)) {
-        // The saved model was retired (or never chosen). Start with the
-        // fastest available model so the chat works immediately.
-        updateKey(activeKey.id, { model: result.models[0].id });
+      } else {
+        const savedModel = getKeyModel(activeKey);
+        const savedIsListed = result.models.some(
+          (model) => model.id === savedModel
+        );
+        if (!savedModel || !savedIsListed) {
+          // Never chosen, retired, or hidden because its provider is offline:
+          // start with the fastest available model so the chat works now.
+          updateKey(activeKey.id, { model: result.models[0].id });
+        }
       }
     } catch (loadError) {
       setModels([]);

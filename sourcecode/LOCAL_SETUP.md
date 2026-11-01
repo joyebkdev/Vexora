@@ -93,7 +93,12 @@ or use "Clear site data" in the browser.
   `temperature: 0.6, top_p: 0.9` (`MODEL_SAMPLING` in `config/providers.js`)
   because the API defaults produce repetitive answers for this model.
 - OpenRouter: free models are detected live from the `:free` suffix and
-  zero-price metadata.
+  zero-price metadata. Free models whose published endpoint is down
+  (`status < 0` or uptime below 50%) are hidden until it recovers, and
+  non-chat entries such as `nvidia/nemotron-3.5-content-safety` and
+  `scaledown/extract` are filtered out. OpenRouter sometimes returns a provider
+  error inside a `200` response; Vexora reads that as an error and retries
+  transient failures once instead of showing "empty response".
 - Gemini: Google's `/models` API has no pricing data, so Vexora parses the
   official pricing page (https://ai.google.dev/gemini-api/docs/pricing) and
   shows only models marked "Free of charge". If that page cannot be read, the

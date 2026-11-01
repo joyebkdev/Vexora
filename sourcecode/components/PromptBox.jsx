@@ -6,6 +6,7 @@ import {
   getKeyModel,
   getModelSampling,
   getProvider,
+  isTransientProviderError,
   isUnavailableModel,
 } from "@/config/providers";
 import { needsLanguageRetry, needsUsefulReply, withLanguageRule } from "@/config/language";
@@ -105,9 +106,10 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
       }));
     };
 
-    // One streaming request. Kept separate so an answer in the wrong language
-    // can be retried without duplicating the fetch/stream handling.
-    const runCompletion = async (requestMessages) => {
+    // One streaming request. Kept separate so an answer in the wrong language,
+    // or a transient provider failure, can be retried without duplicating the
+    // fetch/stream handling.
+    const streamOnce = async (requestMessages) => {
       const headers = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${activeKey.apiKey.trim()}`,
@@ -141,7 +143,15 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
           response.status,
           errorBody
         );
-        if (response.status === 404 || /model/i.test(message)) {
+        // Only a genuinely missing model needs a new model. Provider hints
+        // also mention "model", so match the upstream wording instead of the
+        // word itself.
+        const modelMissing =
+          response.status === 404 ||
+          /no endpoints? found|model (?:not found|does not exist|is not available|is unavailable)|not a valid model|unknown model/i.test(
+            message
+          );
+        if (modelMissing) {
           throw new Error(`${message} Pick another model below the chat box.`);
         }
         if (
@@ -152,12 +162,20 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
             `${message} Check the key in the API keys dashboard.`
           );
         }
-        throw new Error(message);
+
+        const error = new Error(message);
+        error.transient = isTransientProviderError(
+          response.status,
+          errorBody
+        );
+        throw error;
       }
 
       ensureAssistantBubble();
 
       let streamed = "";
+      let reasoned = "";
+      let finishReason = "";
       const addDelta = (text) => {
         if (!text) return;
         streamed += text;
@@ -178,14 +196,29 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
           return;
         }
 
-        if (event.error) {
-          throw new Error(
-            describeProviderError(provider.id, event.error.code || 500, event)
+        const choice = event.choices?.[0];
+        // OpenRouter puts mid-stream provider errors at the top level, but
+        // some providers attach them to the choice instead.
+        const streamError = event.error || choice?.error;
+        if (streamError) {
+          const error = new Error(
+            describeProviderError(
+              provider.id,
+              streamError.code || event.code || 500,
+              event
+            )
           );
+          error.transient = isTransientProviderError(
+            streamError.code || 500,
+            event
+          );
+          throw error;
         }
 
-        const delta = event.choices?.[0]?.delta?.content;
-        if (typeof delta === "string") addDelta(delta);
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
+        const delta = choice?.delta;
+        if (typeof delta?.content === "string") addDelta(delta.content);
+        if (typeof delta?.reasoning === "string") reasoned += delta.reasoning;
       };
 
       const contentType = response.headers.get("content-type") || "";
@@ -209,15 +242,58 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
         if (buffer.trim()) consumeLine(buffer);
       } else {
         // Some OpenAI-compatible endpoints ignore `stream` and return JSON.
-        const data = await response.json();
-        addDelta(data.choices?.[0]?.message?.content || "");
+        // OpenRouter also answers 200 with an error body when the upstream
+        // provider fails after the headers were sent.
+        const data = await response.json().catch(() => null);
+        const providerError =
+          data?.error || data?.choices?.[0]?.error || null;
+
+        if (providerError) {
+          const status = providerError.code || response.status;
+          const error = new Error(
+            describeProviderError(provider.id, status, data)
+          );
+          error.transient = isTransientProviderError(status, data);
+          throw error;
+        }
+
+        const choice = data?.choices?.[0];
+        addDelta(
+          choice?.message?.content || choice?.message?.refusal || ""
+        );
       }
 
       if (!streamed.trim()) {
-        throw new Error(`${provider.name} returned an empty response`);
+        if (reasoned.trim() || finishReason === "length") {
+          throw new Error(
+            `${provider.name} spent its whole output budget on reasoning before writing an answer. Pick another model.`
+          );
+        }
+
+        const error = new Error(
+          `${provider.name} returned an empty response. The provider may still be warming up.`
+        );
+        error.transient = true;
+        throw error;
       }
 
       return streamed;
+    };
+
+    // Providers occasionally fail on the first request (cold start, overload,
+    // a flaky upstream). Retry those once before showing an error.
+    let transientRetried = false;
+    const runCompletion = async (requestMessages) => {
+      try {
+        return await streamOnce(requestMessages);
+      } catch (error) {
+        if (!error.transient || transientRetried) throw error;
+        transientRetried = true;
+        reader = null;
+        setAssistantText("");
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        return await streamOnce(requestMessages);
+      }
     };
 
     try {

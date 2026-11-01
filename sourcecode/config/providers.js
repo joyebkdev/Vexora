@@ -174,12 +174,88 @@ const GEMINI_KEY_HINTS = {
     "The free-tier quota for this key is used up. Wait for it to reset or pick another model.",
 };
 
+const getErrorObject = (data) => {
+  if (Array.isArray(data)) return getErrorObject(data[0]);
+
+  const candidate =
+    data?.error ||
+    data?.choices?.[0]?.error ||
+    (data?.choices?.[0]?.finish_reason === "error"
+      ? data.choices[0]
+      : null);
+  if (!candidate) return null;
+
+  // A few providers nest the real error one level deeper.
+  if (candidate.error && !candidate.message && !candidate.code) {
+    return getErrorObject(candidate);
+  }
+  return candidate;
+};
+
+// Some upstreams report their error as a JSON string inside the message.
+const unwrapMessage = (message) => {
+  const text = (message || "").trim();
+  if (!/^[[{]/.test(text)) return text;
+
+  try {
+    const parsed = JSON.parse(text);
+    const nested = getErrorObject(parsed) || parsed;
+    if (typeof nested?.message === "string" && nested.message.trim()) {
+      return nested.message.trim();
+    }
+    if (typeof nested?.error === "string" && nested.error.trim()) {
+      return nested.error.trim();
+    }
+  } catch {
+    // Not JSON after all.
+  }
+  return text;
+};
+
+const OPENROUTER_HINTS = {
+  provider_unavailable:
+    "The upstream provider failed while answering. Retry once, or pick another free model.",
+  provider_overloaded:
+    "The upstream provider is overloaded. Try again in a moment or pick another model.",
+  timeout: "The upstream provider timed out. Try again or pick another model.",
+  server:
+    "The upstream provider hit an internal error. Try again or pick another model.",
+  unmapped:
+    "The upstream provider returned an unexpected error. Try again or pick another model.",
+  rate_limit_exceeded:
+    "The rate limit for this key or free model is used up. Wait for it to reset.",
+  content_policy_violation:
+    "The provider's content filter declined this request.",
+  refusal: "The model refused this request.",
+  authentication:
+    "OpenRouter rejected the key. Check it in the API keys dashboard.",
+  payment_required:
+    "This key has no credits for the selected model. Pick a free model.",
+};
+
+const TRANSIENT_ERROR_TYPES = new Set([
+  "provider_unavailable",
+  "provider_overloaded",
+  "timeout",
+  "server",
+  "unmapped",
+]);
+
+export const isTransientProviderError = (status, data) => {
+  const error = getErrorObject(data);
+  const type = error?.metadata?.error_type;
+  if (type && TRANSIENT_ERROR_TYPES.has(type)) return true;
+  return [502, 503, 504].includes(Number(status));
+};
+
 export const describeProviderError = (providerId, status, data) => {
-  const error = Array.isArray(data) ? data[0]?.error : data?.error;
-  const message = (error?.message || data?.message || "").trim();
+  const error = getErrorObject(data);
+  const message = unwrapMessage(error?.message || data?.message || "");
   const reason =
     error?.details?.find((detail) => detail?.reason)?.reason ||
     (/valid api key/i.test(message) ? "API_KEY_INVALID" : "");
+  const errorType = error?.metadata?.error_type || "";
+  const providerName = error?.metadata?.provider_name || "";
 
   if (providerId === "gemini") {
     if (GEMINI_KEY_HINTS[reason]) {
@@ -192,6 +268,19 @@ export const describeProviderError = (providerId, status, data) => {
     }
   }
 
+  if (providerId === "openrouter") {
+    const hint = OPENROUTER_HINTS[errorType];
+    if (hint) {
+      const body = message || "OpenRouter returned an error.";
+      return providerName ? `${body} (${providerName}) ${hint}` : `${body} ${hint}`;
+    }
+    if (status === 429) {
+      return `${message || "OpenRouter rate-limited this key."} ${
+        OPENROUTER_HINTS.rate_limit_exceeded
+      }`;
+    }
+  }
+
   if (message) return message;
   if (status === 429) {
     return "Rate limit reached. Wait a moment or pick another model.";
@@ -200,7 +289,7 @@ export const describeProviderError = (providerId, status, data) => {
 };
 
 const NON_CHAT_MODEL =
-  /whisper|orpheus|guard|tts|ocr|moderation|embed|rerank|audio|realtime|transcribe|lyria|music|speech|dall-e|gpt-image|imagen|veo|sora|kling|runway|flux|stable-diffusion/i;
+  /whisper|orpheus|guard|tts|ocr|moderation|embed|rerank|audio|realtime|transcribe|lyria|music|speech|dall-e|gpt-image|imagen|veo|sora|kling|runway|flux|stable-diffusion|content-safety|scaledown\/(?:extract|summarize)/i;
 
 const deriveModelsUrl = (endpoint) => {
   const trimmed = (endpoint || "").trim();
@@ -347,6 +436,46 @@ const normalizeModels = (providerId, data, freeIds) => {
   return unique.sort(compareModels);
 };
 
+// OpenRouter publishes per-provider health. Free models have a single
+// provider, so when that endpoint is down the model can only fail. Check those
+// endpoints at load time and hide the ones that are down; they reappear as soon
+// as the provider recovers.
+const OPENROUTER_HEALTH_TTL = 10 * 60 * 1000;
+const openRouterHealth = new Map();
+
+const isEndpointDown = (endpoint) => {
+  if (typeof endpoint.status === "number" && endpoint.status < 0) return true;
+  const uptime = endpoint.uptime_last_30m;
+  return typeof uptime === "number" && uptime < 50;
+};
+
+const isOpenRouterModelOffline = async (modelId) => {
+  const cached = openRouterHealth.get(modelId);
+  if (cached && Date.now() - cached.at < OPENROUTER_HEALTH_TTL) {
+    return cached.offline;
+  }
+
+  try {
+    // Do not encode the colon: `model:free/endpoints` targets the free variant.
+    const response = await fetch(
+      `https://openrouter.ai/api/v1/models/${modelId}/endpoints`,
+      { cache: "no-store" }
+    );
+    if (!response.ok) return false;
+
+    const data = await response.json().catch(() => null);
+    const endpoints = data?.data?.endpoints || [];
+    if (endpoints.length === 0) return false;
+
+    const offline = endpoints.every(isEndpointDown);
+    openRouterHealth.set(modelId, { at: Date.now(), offline });
+    return offline;
+  } catch {
+    // Fail open: a status lookup error must never hide usable models.
+    return false;
+  }
+};
+
 export async function fetchProviderModels(providerId, apiKey, endpoint) {
   const provider = getProvider(providerId);
   const trimmedKey = (apiKey || "").trim();
@@ -399,9 +528,35 @@ export async function fetchProviderModels(providerId, apiKey, endpoint) {
   }
 
   const models = normalizeModels(providerId, data, freeIds);
+  let visibleModels = models;
+  let offlineModels = [];
+
+  if (providerId === "openrouter") {
+    const freeModels = models.filter((model) => model.free === true);
+    const checks = await Promise.all(
+      freeModels.map(async (model) => [
+        model.id,
+        await isOpenRouterModelOffline(model.id),
+      ])
+    );
+    offlineModels = checks
+      .filter(([, offline]) => offline)
+      .map(([id]) => id);
+
+    if (offlineModels.length > 0) {
+      const hidden = new Set(offlineModels);
+      visibleModels = models.filter((model) => !hidden.has(model.id));
+      const note =
+        `${offlineModels.length} free model` +
+        `${offlineModels.length === 1 ? " is" : "s are"} offline at ` +
+        "OpenRouter and hidden until it recovers.";
+      warning = warning ? `${warning} ${note}` : note;
+    }
+  }
 
   return {
-    models,
+    models: visibleModels,
+    offlineModels,
     freeFilterApplied,
     warning,
     source: provider.docsUrl || modelsUrl,

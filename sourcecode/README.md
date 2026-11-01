@@ -24,6 +24,7 @@ multiple providers:
 - **Live free-model detection** - OpenRouter free models are filtered from live
   pricing data, and Gemini's free-tier list is read from Google's official
   pricing page. Other providers expose their whole free-tier-eligible list.
+  OpenRouter models whose upstream provider is down are hidden until it recovers.
 - **Model picker in chat** - click the model name below the message box to
   switch models for the active key. The list is fetched live, searchable, and
   remembers your choice.
@@ -39,6 +40,10 @@ multiple providers:
   ignore that rule, so a mostly-Arabic answer to an English message is retried
   once with the rule repeated. An answer that only echoes your message is
   retried the same way, and ALLaM uses the sampling values from its model card.
+- **Provider failure diagnostics** - upstream failures that arrive inside a
+  `200` response (OpenRouter does this) are parsed as errors instead of looking
+  like an empty answer. Transient failures and empty responses are retried once,
+  and the message names the upstream provider when OpenRouter reports one.
 - **Chats that persist locally** - reload the page and conversations remain.
 - **Multiple chats** - create, rename, delete and switch between conversations.
 - **Markdown + code highlighting** - rendered with `react-markdown` and Prism.
@@ -146,8 +151,14 @@ vexora/
   future retired IDs to `UNAVAILABLE_MODEL_PATTERNS` in `config/providers.js`.
 - Replies stream token by token. If a provider ignores streaming, Vexora falls
   back to the full JSON response automatically.
+- OpenRouter can send an error inside a `200` response, or an empty stream when
+  its upstream provider fails. Vexora parses both as errors, retries transient
+  provider failures and empty answers once, and hides free models whose
+  OpenRouter endpoint is currently down (`status < 0` or under 50% uptime).
+  Hidden models come back automatically when the provider recovers.
 - **Load/refresh** filters Groq's non-chat models, Gemini's non-text models, and
-  OpenRouter's paid models.
+  OpenRouter's paid and non-chat models (content-safety classifiers, music, and
+  ScaleDown's extraction/summarization models).
 - Gemini's free list is parsed live from the official pricing page
   (https://ai.google.dev/gemini-api/docs/pricing). If Google changes the page or
   is temporarily unavailable, Vexora shows all available models and warns you in
