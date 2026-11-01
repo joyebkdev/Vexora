@@ -109,6 +109,24 @@ export const isUnavailableModel = (providerId, modelId) => {
   return patterns.some((pattern) => pattern.test(id));
 };
 
+// Sampling hints, not model discovery. A few small models are much more
+// reliable at the values their model card recommends instead of the API
+// defaults (temperature 1, top_p 1). ALLaM-2-7B currently echoes the user's
+// words at the defaults and answers properly around 0.6/0.9.
+const MODEL_SAMPLING = [
+  { pattern: /(^|\/)allam-2-7b$/i, temperature: 0.6, topP: 0.9 },
+];
+
+export const getModelSampling = (modelId) => {
+  const id = (modelId || "").trim();
+  const match = MODEL_SAMPLING.find((entry) => entry.pattern.test(id));
+  if (!match) return null;
+  return {
+    ...(match.temperature !== undefined ? { temperature: match.temperature } : {}),
+    ...(match.topP !== undefined ? { top_p: match.topP } : {}),
+  };
+};
+
 export const getProvider = (id) =>
   PROVIDERS.find((provider) => provider.id === id) || CUSTOM_PROVIDER;
 

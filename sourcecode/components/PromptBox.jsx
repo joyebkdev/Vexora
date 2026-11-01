@@ -4,10 +4,11 @@ import {
   describeProviderError,
   getKeyEndpoint,
   getKeyModel,
+  getModelSampling,
   getProvider,
   isUnavailableModel,
 } from "@/config/providers";
-import { withLanguageRule, needsLanguageRetry } from "@/config/language";
+import { needsLanguageRetry, needsUsefulReply, withLanguageRule } from "@/config/language";
 import { useAppContext } from "@/context/AppContext";
 import Image from "next/image";
 import React, { useState } from "react";
@@ -26,6 +27,7 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
 
   const provider = activeKey ? getProvider(activeKey.provider) : null;
   const model = getKeyModel(activeKey);
+  const sampling = getModelSampling(model);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -122,6 +124,7 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
           model,
           messages: requestMessages,
           stream: true,
+          ...sampling,
         }),
       });
 
@@ -230,9 +233,9 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
       const reply = await runCompletion(withLanguageRule(history, text));
 
       // Arabic-first models such as Groq's allam-2-7b can ignore the system
-      // rule. Retry once with it repeated instead of showing Arabic to a user
-      // who wrote English.
-      if (needsLanguageRetry(text, reply)) {
+      // rule, and small models sometimes just echo the user's words. Retry
+      // once with the rule repeated instead of showing that as the answer.
+      if (needsLanguageRetry(text, reply) || needsUsefulReply(text, reply)) {
         reader = null;
         setAssistantText("");
         await runCompletion(withLanguageRule(history, text, true));

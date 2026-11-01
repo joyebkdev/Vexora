@@ -2,6 +2,10 @@
 // Arabic-first model) and answer in it even when the user writes English.
 // Every request therefore carries an explicit language rule so replies follow
 // the language of the latest user message.
+//
+// The rule is deliberately short and positive: small models such as ALLaM are
+// documented as working best without a long, negative system prompt, and a
+// wall of restrictions makes them parrot the user's message instead.
 
 const ARABIC = "Arabic";
 const LATIN = "Latin";
@@ -45,38 +49,46 @@ export const getLanguageInstruction = (latestUserMessage) => {
   const script = detectScript(latestUserMessage);
 
   if (script === ARABIC) {
-    return "The user writes in Arabic. Reply in Arabic unless they explicitly ask for another language.";
+    return "The user wrote in Arabic, so reply in Arabic.";
   }
 
   return (
-    `The user writes in ${script} script, not Arabic. Reply in the same ` +
-    "language and script as the user. Do not answer in Arabic unless the " +
-    "user explicitly asks for Arabic or for a translation."
+    `The user wrote in ${script} script, so reply in that same language. ` +
+    "Do not switch to Arabic."
   );
 };
 
 // Prepends the rule without touching stored messages, so old chats with an
 // Arabic answer do not keep the conversation stuck in Arabic.
-// `force` is used for the single retry: it repeats the rule as a hard
-// requirement for models that otherwise ignore the first instruction.
-export const withLanguageRule = (messages, latestUserMessage, force = false) => {
+// `retry` is used for the single retry: it repeats the rule as a hard
+// requirement and appends a short reminder to the last user turn, because
+// small models often follow the final user message more closely than the
+// system prompt.
+export const withLanguageRule = (messages, latestUserMessage, retry = false) => {
   const instruction = getLanguageInstruction(latestUserMessage);
-  const forceNote = force
-    ? " This is a hard requirement: your previous attempt used the wrong " +
-      "language, so every sentence of this reply must use the language above."
-    : "";
+  const system = retry
+    ? "You are Vexora, a helpful assistant. Your previous reply was not a good " +
+      "answer. Reply again in the user's language with a complete, useful " +
+      "response. Do not repeat the user's message or reply with only a greeting. " +
+      instruction
+    : "You are Vexora, a helpful assistant. Reply in the user's language with " +
+      "a complete, useful answer. Never repeat the user's message or reply " +
+      "with only a greeting. " +
+      instruction;
 
-  return [
-    {
-      role: "system",
+  const prepared = messages.map((message) => ({ ...message }));
+  const last = prepared[prepared.length - 1];
+  if (retry && last?.role === "user") {
+    prepared[prepared.length - 1] = {
+      ...last,
       content:
-        "You are Vexora, a helpful assistant. Always reply in the language the " +
-        "user writes in. " +
-        instruction +
-        forceNote,
-    },
-    ...messages,
-  ];
+        `${last.content}\n\n` +
+        "(Please answer this message properly in my language. " +
+        "Do not repeat my words.)",
+    };
+  }
+
+  return [{ role: "system", content: system }, ...prepared];
 };
 
 // Arabic-first models sometimes ignore the system rule. This detects the
@@ -91,4 +103,19 @@ export const needsLanguageRetry = (userText, replyText) => {
 
   const latin = countScriptLetters(reply, LATIN_LETTER);
   return arabic > latin;
+};
+
+const normalizeText = (value) =>
+  (value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+// Weak models sometimes answer "hello" with "hello" instead of replying.
+// Detecting the echo lets the chat retry once with a direct instruction.
+export const needsUsefulReply = (userText, replyText) => {
+  const user = normalizeText(userText);
+  const reply = normalizeText(replyText);
+  if (!reply || !user) return false;
+  return reply === user;
 };

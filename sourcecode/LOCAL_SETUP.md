@@ -86,7 +86,10 @@ or use "Clear site data" in the browser.
   stream as they are generated so the wait is visible.
 - Groq's `allam-2-7b` is an Arabic-first model. Vexora sends a language rule with
   every request (`config/language.js`), and if the model still answers in Arabic
-  to an English message, the reply is retried once with a stricter rule.
+  to an English message, the reply is retried once with a stricter rule. Replies
+  that only echo your message are retried too, and ALLaM is sent with
+  `temperature: 0.6, top_p: 0.9` (`MODEL_SAMPLING` in `config/providers.js`)
+  because the API defaults produce repetitive answers for this model.
 - OpenRouter: free models are detected live from the `:free` suffix and
   zero-price metadata.
 - Gemini: Google's `/models` API has no pricing data, so Vexora parses the

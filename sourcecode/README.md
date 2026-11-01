@@ -36,7 +36,8 @@ multiple providers:
 - **Replies in your language** - every request tells the model to answer in the
   language you wrote in. Arabic-first models such as Groq's `allam-2-7b` can
   ignore that rule, so a mostly-Arabic answer to an English message is retried
-  once with the rule repeated.
+  once with the rule repeated. An answer that only echoes your message is
+  retried the same way, and ALLaM uses the sampling values from its model card.
 - **Chats that persist locally** - reload the page and conversations remain.
 - **Multiple chats** - create, rename, delete and switch between conversations.
 - **Markdown + code highlighting** - rendered with `react-markdown` and Prism.
