@@ -34,7 +34,8 @@ multiple providers:
   a new key does not default to a heavy reasoning model, and replies stream
   token by token instead of waiting for the full answer.
 - **Replies in your language** - every request tells the model to answer in the
-  language you wrote in. Arabic-first models such as Groq's `allam-2-7b` can
+  language you wrote in, named explicitly (English, Italian, Arabic, ...) rather
+  than a writing system. Arabic-first models such as Groq's `allam-2-7b` can
   ignore that rule, so a mostly-Arabic answer to an English message is retried
   once with the rule repeated. An answer that only echoes your message is
   retried the same way, and ALLaM uses the sampling values from its model card.

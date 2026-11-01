@@ -85,9 +85,11 @@ or use "Clear site data" in the browser.
   than Flash-Lite. New keys default to the fastest available model; replies
   stream as they are generated so the wait is visible.
 - Groq's `allam-2-7b` is an Arabic-first model. Vexora sends a language rule with
-  every request (`config/language.js`), and if the model still answers in Arabic
-  to an English message, the reply is retried once with a stricter rule. Replies
-  that only echo your message are retried too, and ALLaM is sent with
+  every request (`config/language.js`) that names the detected language
+  explicitly. Never mention a writing system: ALLaM reads "Latin script" as the
+  Latin language and answers in Latin. If the model still answers in Arabic (or
+  Latin) to an English message, the reply is retried once with a stricter rule.
+  Replies that only echo your message are retried too, and ALLaM is sent with
   `temperature: 0.6, top_p: 0.9` (`MODEL_SAMPLING` in `config/providers.js`)
   because the API defaults produce repetitive answers for this model.
 - OpenRouter: free models are detected live from the `:free` suffix and
