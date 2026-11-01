@@ -13,9 +13,8 @@ npm run dev
 ```
 
 Open http://localhost:3000, click **API keys** in the sidebar (or go to
-http://localhost:3000/dashboard), and add a free key from Groq, Google Gemini,
-OpenRouter, Cerebras or Mistral. Chats and keys are saved in this browser's
-`localStorage`.
+http://localhost:3000/dashboard), and add a free key from Groq, Google Gemini or
+OpenRouter. Chats and keys are saved in this browser's `localStorage`.
 
 Back in the chat, click the model name under the message box to switch models
 for the active key. The menu is fetched live from the provider, searchable, and
@@ -34,8 +33,8 @@ marks free models.
   no model IDs are hardcoded.
 - Added `/api/free-models`, a cached read-only parser for Google's public
   Gemini pricing page.
-- Uses free-tier providers from `config/providers.js` (Groq, Gemini, OpenRouter,
-  Cerebras, Mistral) plus any custom OpenAI-compatible endpoint.
+- Uses free-tier providers from `config/providers.js` (Groq, Gemini,
+  OpenRouter) plus any custom OpenAI-compatible endpoint.
 - `.env.local` / `.env.example` are no longer used.
 
 ## Windows ARM64 note (already applied)
@@ -77,8 +76,8 @@ or use "Clear site data" in the browser.
 - Free tiers are rate-limited; errors are shown as toasts in the app.
 - Add keys from **API keys** in the sidebar. Models load automatically from the
   provider's official model list; use **Refresh models** to reload.
-- Groq, Cerebras and Mistral do not publish per-model free flags. Vexora shows
-  every chat model the key can access; the provider enforces free-tier limits.
+- Groq does not publish per-model free flags. Vexora shows every chat model the
+  key can access; the provider enforces free-tier limits.
 - Gemini 2.5 Pro/Flash/Flash-Lite are hidden (`UNAVAILABLE_MODEL_PATTERNS` in
   `config/providers.js`) because Google no longer serves them to new keys.
 - Gemini 3.8 Flash is Google's heavy reasoning model and can respond much slower

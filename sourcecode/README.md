@@ -15,7 +15,7 @@ multiple providers:
 ## Features
 
 - **API key dashboard** - add and manage keys for Groq, Google Gemini,
-  OpenRouter, Cerebras, Mistral, or any OpenAI-compatible endpoint.
+  OpenRouter, or any OpenAI-compatible endpoint.
 - **One active key** - switch provider only when you need to; every chat uses
   the active key, provider and model.
 - **Dynamic model discovery** - models load automatically from each provider's

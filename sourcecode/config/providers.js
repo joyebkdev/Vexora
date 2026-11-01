@@ -51,32 +51,6 @@ export const PROVIDERS = [
     docsUrl: "https://openrouter.ai/models?max_price=0",
   },
   {
-    id: "cerebras",
-    name: "Cerebras",
-    description: "Extremely fast inference with a free developer tier.",
-    endpoint: "https://api.cerebras.ai/v1/chat/completions",
-    modelsUrl: "https://api.cerebras.ai/v1/models",
-    keyUrl: "https://cloud.cerebras.ai",
-    keyHint: "csk-...",
-    keyPattern: /^csk-[A-Za-z0-9_-]{20,}$/,
-    freeTier: "Free tier",
-    accent: "#FF6B35",
-    docsUrl: "https://inference-docs.cerebras.ai/models/overview",
-  },
-  {
-    id: "mistral",
-    name: "Mistral",
-    description: "Mistral's free experiment tier for small and large models.",
-    endpoint: "https://api.mistral.ai/v1/chat/completions",
-    modelsUrl: "https://api.mistral.ai/v1/models",
-    keyUrl: "https://console.mistral.ai/api-keys",
-    keyHint: "Your Mistral API key",
-    keyPattern: /^[A-Za-z0-9_-]{24,}$/,
-    freeTier: "Free tier",
-    accent: "#FF7000",
-    docsUrl: "https://docs.mistral.ai/getting-started/models/models_overview/",
-  },
-  {
     id: "custom",
     name: "Custom endpoint",
     description: "Any OpenAI-compatible chat completions endpoint.",
@@ -113,6 +87,12 @@ export const isUnavailableModel = (providerId, modelId) => {
   const id = (modelId || "").trim();
   return patterns.some((pattern) => pattern.test(id));
 };
+
+// Saved keys can outlive a provider entry (Cerebras and Mistral no longer
+// offer free keys). Treat them as unknown instead of falling back to the
+// custom provider, which would leave a key with an empty endpoint.
+export const isKnownProvider = (providerId) =>
+  PROVIDERS.some((provider) => provider.id === providerId);
 
 // Sampling hints, not model discovery. A few small models are much more
 // reliable at the values their model card recommends instead of the API

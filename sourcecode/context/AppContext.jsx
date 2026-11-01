@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   getProvider,
+  isKnownProvider,
   isUnavailableModel,
 } from "@/config/providers";
 
@@ -137,7 +138,13 @@ export const AppContextProvider = ({ children }) => {
       const rawKeys = localStorage.getItem(KEYS_KEY);
       if (rawKeys) {
         const parsed = JSON.parse(rawKeys);
-        if (Array.isArray(parsed)) storedKeys = parsed.map(normalizeKey);
+        if (Array.isArray(parsed)) {
+          // Drop keys for providers that are no longer offered (Cerebras,
+          // Mistral) before normalizeKey would turn them into custom keys.
+          storedKeys = parsed
+            .filter((key) => isKnownProvider(key?.provider))
+            .map(normalizeKey);
+        }
       }
     } catch {
       storedKeys = [];
