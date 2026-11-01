@@ -399,11 +399,16 @@ const normalizeModels = (providerId, data, freeIds) => {
     let free = null;
     if (providerId === "gemini" && freeIds) {
       free = freeIds.has(id);
+      // Vexora lists free models only. When Google's pricing page was parsed,
+      // skip the paid Gemini models instead of offering them in the picker.
+      if (!free) continue;
     } else if (providerId === "openrouter") {
       free =
         id.endsWith(":free") ||
         Number(item.pricing?.prompt) === 0 ||
         Number(item.pricing?.completion) === 0;
+      // Never offer an OpenRouter model that can bill the user.
+      if (!free) continue;
     }
 
     models.push({ id, free });

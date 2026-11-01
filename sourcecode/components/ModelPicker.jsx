@@ -54,7 +54,6 @@ const ModelPicker = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [freeOnly, setFreeOnly] = useState(true);
   const [loaded, setLoaded] = useState({ keyId: null, at: 0 });
   const rootRef = useRef(null);
   const searchRef = useRef(null);
@@ -83,7 +82,6 @@ const ModelPicker = () => {
       setModels(result.models);
       setModelInfo(result);
       setLoaded({ keyId: activeKey.id, at: Date.now() });
-      setFreeOnly(result.freeFilterApplied);
       if (result.models.length === 0) {
         setError("No chat models were returned for this key.");
       } else {
@@ -151,11 +149,10 @@ const ModelPicker = () => {
 
   const visibleModels = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return models.filter((model) => {
-      if (freeOnly && model.free === false) return false;
-      return !term || model.id.toLowerCase().includes(term);
-    });
-  }, [models, query, freeOnly]);
+    return models.filter(
+      (model) => !term || model.id.toLowerCase().includes(term)
+    );
+  }, [models, query]);
 
   if (!activeKey) {
     return (
@@ -177,9 +174,7 @@ const ModelPicker = () => {
     ? "Loading models…"
     : error
       ? error
-      : modelInfo?.freeFilterApplied
-        ? `${visibleModels.length}${freeOnly ? ` of ${models.length}` : ""} models · ${provider.name}`
-        : `${visibleModels.length} models · ${provider.name}`;
+      : `${visibleModels.length} free models · ${provider.name}`;
 
   return (
     <div ref={rootRef} className="relative min-w-0">
@@ -234,22 +229,11 @@ const ModelPicker = () => {
               onKeyDown={(event) => {
                 if (event.key === "Enter") event.preventDefault();
               }}
-              placeholder="Search models"
+              placeholder="Search free models"
               autoComplete="off"
               spellCheck={false}
               className="w-full rounded-lg border border-white/10 bg-[#404045] px-2.5 py-1.5 text-xs text-white outline-none placeholder:text-white/30 focus:border-primary/60"
             />
-            {modelInfo?.freeFilterApplied ? (
-              <label className="flex cursor-pointer items-center gap-2 pb-1 text-[11px] text-white/45">
-                <input
-                  type="checkbox"
-                  checked={freeOnly}
-                  onChange={(event) => setFreeOnly(event.target.checked)}
-                  className="accent-primary"
-                />
-                Free models only
-              </label>
-            ) : null}
           </div>
 
           <div className="max-h-64 overflow-y-auto px-1.5 pb-1.5">

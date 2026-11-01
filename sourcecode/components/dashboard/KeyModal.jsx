@@ -25,22 +25,16 @@ const KeyModal = ({ open, initial, onClose, onSave }) => {
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState([]);
   const [modelInfo, setModelInfo] = useState(null);
-  const [freeOnly, setFreeOnly] = useState(true);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState("");
 
   const provider = getProvider(form.provider);
   const isCustom = form.provider === "custom";
-  const visibleModels = freeOnly
-    ? models.filter((model) => model.free !== false)
-    : models;
-  const freeCount = models.filter((model) => model.free === true).length;
+  const visibleModels = models;
   const selectedModel = models.find((model) => model.id === form.model);
-  const modelSummary = modelInfo?.freeFilterApplied
-    ? `${freeCount} free models · ${models.length} total, fetched live from ${provider.name}`
-    : provider.id === "custom"
-      ? `${models.length} models available from this endpoint, fetched live`
-      : `${models.length} models available on the free tier, fetched live from ${provider.name}`;
+  const modelSummary = isCustom
+    ? `${models.length} models available from this endpoint, fetched live`
+    : `${models.length} free models, fetched live from ${provider.name}`;
 
   // Always fetch live. Google's free-tier list is resolved on the server via
   // /api/free-models; every other provider is read from its official /models
@@ -72,9 +66,7 @@ const KeyModal = ({ open, initial, onClose, onSave }) => {
         return;
       }
 
-      const available = freeOnly
-        ? result.models.filter((model) => model.free !== false)
-        : result.models;
+      const available = result.models;
 
       setForm((prev) => {
         if (result.models.some((model) => model.id === prev.model)) {
@@ -112,7 +104,6 @@ const KeyModal = ({ open, initial, onClose, onSave }) => {
     }
     setModels([]);
     setModelInfo(null);
-    setFreeOnly(true);
     setError("");
     setShowKey(false);
   }, [open, initial]);
@@ -166,18 +157,6 @@ const KeyModal = ({ open, initial, onClose, onSave }) => {
     setModels([]);
     setModelInfo(null);
     setError("");
-  };
-
-  const changeFreeOnly = (checked) => {
-    setFreeOnly(checked);
-    const available = checked
-      ? models.filter((model) => model.free !== false)
-      : models;
-    setForm((prev) =>
-      available.some((model) => model.id === prev.model)
-        ? prev
-        : { ...prev, model: available[0]?.id || "" }
-    );
   };
 
   const save = () => {
@@ -384,18 +363,6 @@ const KeyModal = ({ open, initial, onClose, onSave }) => {
               ))}
             </datalist>
 
-            {modelInfo?.freeFilterApplied && models.length > 0 && (
-              <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs text-white/50">
-                <input
-                  type="checkbox"
-                  checked={freeOnly}
-                  onChange={(event) => changeFreeOnly(event.target.checked)}
-                  className="accent-primary"
-                />
-                Free models only ({freeCount})
-              </label>
-            )}
-
             {error ? (
               <p className="mt-2 text-xs text-red-400">{error}</p>
             ) : models.length > 0 ? (
@@ -416,11 +383,6 @@ const KeyModal = ({ open, initial, onClose, onSave }) => {
             {selectedModel?.free === true && modelInfo?.freeFilterApplied ? (
               <p className="mt-1 text-[11px] text-emerald-400/70">
                 This model is listed as free by the provider.
-              </p>
-            ) : null}
-            {selectedModel?.free === false ? (
-              <p className="mt-1 text-[11px] text-amber-300/70">
-                This model is not listed as free. It may require billing.
               </p>
             ) : null}
           </div>

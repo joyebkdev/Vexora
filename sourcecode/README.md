@@ -23,8 +23,9 @@ multiple providers:
   retired models appear without updating Vexora.
 - **Live free-model detection** - OpenRouter free models are filtered from live
   pricing data, and Gemini's free-tier list is read from Google's official
-  pricing page. Other providers expose their whole free-tier-eligible list.
-  OpenRouter models whose upstream provider is down are hidden until it recovers.
+  pricing page. Paid models are never listed: Vexora only offers free models.
+  Other providers expose their whole free-tier-eligible list. OpenRouter models
+  whose upstream provider is down are hidden until it recovers.
 - **Model picker in chat** - click the model name below the message box to
   switch models for the active key. The list is fetched live, searchable, and
   remembers your choice.
@@ -158,9 +159,9 @@ vexora/
   provider failures and empty answers once, and hides free models whose
   OpenRouter endpoint is currently down (`status < 0` or under 50% uptime).
   Hidden models come back automatically when the provider recovers.
-- **Load/refresh** filters Groq's non-chat models, Gemini's non-text models, and
-  OpenRouter's paid and non-chat models (content-safety classifiers, music, and
-  ScaleDown's extraction/summarization models).
+- **Load/refresh** filters Groq's non-chat models, Gemini's non-text and paid
+  models, and OpenRouter's paid and non-chat models (content-safety classifiers,
+  music, and ScaleDown's extraction/summarization models).
 - Gemini's free list is parsed live from the official pricing page
   (https://ai.google.dev/gemini-api/docs/pricing). If Google changes the page or
   is temporarily unavailable, Vexora shows all available models and warns you in
