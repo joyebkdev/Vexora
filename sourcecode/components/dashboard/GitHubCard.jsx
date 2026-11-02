@@ -1,7 +1,7 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
-import { githubTokenUrl, listRepositories } from "@/config/github";
+import { githubTokenUrl } from "@/config/github";
 import { useGitHub } from "@/context/GitHubContext";
 
 const inputClass =
@@ -22,76 +22,12 @@ export default function GitHubCard() {
     connect,
     disconnect,
     refreshAccount,
-    selectRepository,
-    setBranch,
-    createRepository,
-    refreshWriteAccess,
-    saveProjectFiles,
   } = useGitHub();
 
   const [token, setToken] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [repos, setRepos] = useState([]);
-  const [mode, setMode] = useState("existing");
-  const [newName, setNewName] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newPrivate, setNewPrivate] = useState(true);
-
-  // Load the account's repositories after connecting, or when the token
-  // changes. Repo lists are fetched straight from GitHub in the browser.
-  useEffect(() => {
-    if (!ready || !github.token) return;
-    let active = true;
-
-    listRepositories(github.token)
-      .then((list) => {
-        if (active) setRepos(list);
-      })
-      .catch((err) => {
-        if (active) setError(err.message);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [ready, github.token]);
-
-  const loadRepos = useCallback(async () => {
-    if (!github.token) return;
-    setBusy("repos");
-    setError("");
-    try {
-      setRepos(await listRepositories(github.token));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy("");
-    }
-  }, [github.token]);
-
-  const selectedFullName = useMemo(() => {
-    if (!github.repo) return "";
-    const match = repos.find(
-      (repo) =>
-        repo.owner === github.repo.owner && repo.name === github.repo.name
-    );
-    return match?.fullName || `${github.repo.owner}/${github.repo.name}`;
-  }, [github.repo, repos]);
-
-  const selectedRepoIsMissing =
-    Boolean(github.repo) &&
-    !repos.some(
-      (repo) =>
-        repo.owner === github.repo.owner && repo.name === github.repo.name
-    );
-
-  const repoUrl =
-    github.repo?.htmlUrl ||
-    (github.repo
-      ? `https://github.com/${github.repo.owner}/${github.repo.name}`
-      : "");
 
   const handleConnect = async (event) => {
     event.preventDefault();
@@ -115,8 +51,6 @@ export default function GitHubCard() {
     );
     if (!confirmed) return;
     disconnect();
-    setRepos([]);
-    setMode("existing");
     setError("");
     toast.success("GitHub disconnected");
   };
@@ -134,96 +68,14 @@ export default function GitHubCard() {
     }
   };
 
-  const handleSelect = (event) => {
-    const repo = repos.find((item) => item.fullName === event.target.value);
-    if (repo) selectRepository(repo);
-  };
-
-  const handleCreate = async (event) => {
-    event.preventDefault();
-    setError("");
-    setBusy("create");
-    try {
-      const repo = await createRepository({
-        name: newName,
-        description: newDescription,
-        private: newPrivate,
-      });
-      setRepos((prev) => [
-        repo,
-        ...prev.filter((item) => item.fullName !== repo.fullName),
-      ]);
-      setMode("existing");
-      setNewName("");
-      setNewDescription("");
-      toast.success(`Created ${repo.fullName}`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleCheckWrite = async () => {
-    setError("");
-    setBusy("check");
-    try {
-      const repo = await refreshWriteAccess();
-      if (repo.canPush === true) {
-        toast.success("Write access confirmed");
-      } else if (repo.canPush === false) {
-        setError(
-          "This token can read the repository but cannot push. Use a token with Contents read and write access."
-        );
-      } else {
-        toast.success("Repository checked");
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleTestSave = async () => {
-    if (!github.user || !github.repo) return;
-    setError("");
-    setBusy("save");
-    try {
-      const result = await saveProjectFiles(
-        [
-          {
-            path: ".vexora/connection.json",
-            content: `${JSON.stringify(
-              {
-                app: "Vexora",
-                account: github.user.login,
-                repository: `${github.repo.owner}/${github.repo.name}`,
-                branch: github.repo.branch,
-                savedAt: new Date().toISOString(),
-              },
-              null,
-              2
-            )}\n`,
-          },
-        ],
-        "Connect Vexora project"
-      );
-      toast.success(`Saved to ${result.branch}`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy("");
-    }
-  };
-
   return (
     <section className="mt-10">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-medium">Project repository</h2>
+          <h2 className="text-lg font-medium">GitHub</h2>
           <p className="mt-1 max-w-2xl text-sm text-white/40">
-            Save the code Vexora generates to a GitHub repository you own.
+            Connect once here, then choose the project repository from the chat
+            box next to the model picker.
           </p>
         </div>
         <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/40">
@@ -329,224 +181,21 @@ export default function GitHubCard() {
               </div>
             </div>
 
-            <div className="mt-5 border-t border-white/10 pt-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">Repository</h3>
-                <div className="flex items-center gap-3 text-xs">
-                  {busy === "repos" ? (
-                    <span className="text-white/35">Loading…</span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={loadRepos}
-                    disabled={Boolean(busy)}
-                    className="text-primary hover:underline disabled:opacity-40"
-                  >
-                    Refresh list
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-                <select
-                  id="github-repo"
-                  value={selectedFullName}
-                  onChange={handleSelect}
-                  className={inputClass}
-                >
-                  <option value="">Select a repository…</option>
-                  {selectedRepoIsMissing ? (
-                    <option value={selectedFullName}>
-                      {selectedFullName}
-                    </option>
-                  ) : null}
-                  {repos.map((repo) => (
-                    <option key={repo.fullName} value={repo.fullName}>
-                      {repo.fullName}
-                      {repo.private ? " (private)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMode((value) =>
-                      value === "new" ? "existing" : "new"
-                    )
-                  }
-                  disabled={Boolean(busy)}
-                  className={secondaryButton}
-                >
-                  {mode === "new" ? "Cancel" : "+ New repository"}
-                </button>
-              </div>
-
-              {mode === "new" ? (
-                <form
-                  onSubmit={handleCreate}
-                  className="mt-3 space-y-3 rounded-2xl border border-white/10 bg-black/10 p-4"
-                >
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label htmlFor="github-new-name" className={labelClass}>
-                        Repository name
-                      </label>
-                      <input
-                        id="github-new-name"
-                        type="text"
-                        value={newName}
-                        onChange={(event) => setNewName(event.target.value)}
-                        placeholder="my-vexora-project"
-                        autoComplete="off"
-                        spellCheck={false}
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="github-new-description"
-                        className={labelClass}
-                      >
-                        Description (optional)
-                      </label>
-                      <input
-                        id="github-new-description"
-                        type="text"
-                        value={newDescription}
-                        onChange={(event) =>
-                          setNewDescription(event.target.value)
-                        }
-                        placeholder="Built with Vexora"
-                        autoComplete="off"
-                        className={inputClass}
-                      />
-                    </div>
-                  </div>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs text-white/60">
-                    <input
-                      type="checkbox"
-                      checked={newPrivate}
-                      onChange={(event) => setNewPrivate(event.target.checked)}
-                      className="accent-primary"
-                    />
-                    Private repository
-                  </label>
-                  <button
-                    type="submit"
-                    disabled={Boolean(busy) || !newName.trim()}
-                    className={primaryButton}
-                  >
-                    {busy === "create"
-                      ? "Creating repository…"
-                      : "Create repository"}
-                  </button>
-                </form>
-              ) : null}
-
+            <p className="mt-4 border-t border-white/10 pt-4 text-xs leading-5 text-white/40">
               {github.repo ? (
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="github-branch" className={labelClass}>
-                      Branch
-                    </label>
-                    <input
-                      id="github-branch"
-                      type="text"
-                      value={github.repo.branch}
-                      onChange={(event) => setBranch(event.target.value)}
-                      placeholder="main"
-                      autoComplete="off"
-                      spellCheck={false}
-                      className={inputClass}
-                    />
-                    <p className="mt-1.5 text-[11px] text-white/35">
-                      Generated files are committed to this branch.
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className={labelClass}>Write access</p>
-                    <p
-                      className={`text-xs ${
-                        github.repo.canPush === true
-                          ? "text-emerald-400"
-                          : github.repo.canPush === false
-                            ? "text-red-400"
-                            : "text-white/40"
-                      }`}
-                    >
-                      {github.repo.canPush === true
-                        ? "Confirmed — Vexora can commit to this repository."
-                        : github.repo.canPush === false
-                          ? "This token cannot push to this repository."
-                          : "Not checked yet."}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={handleCheckWrite}
-                        disabled={Boolean(busy)}
-                        className={secondaryButton}
-                      >
-                        {busy === "check" ? "Checking…" : "Check write access"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleTestSave}
-                        disabled={Boolean(busy)}
-                        className={secondaryButton}
-                      >
-                        {busy === "save" ? "Saving…" : "Test save"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <>
+                  The chat is saving to{" "}
+                  <span className="text-white/70">
+                    {github.repo.owner}/{github.repo.name}
+                  </span>{" "}
+                  on{" "}
+                  <code className="text-white/70">{github.repo.branch}</code>.
+                  Change the repository or branch from the chat box.
+                </>
               ) : (
-                <p className="mt-4 text-xs text-white/35">
-                  Choose an existing repository or create a new one to enable
-                  project saves.
-                </p>
+                "Choose a repository from the chat box, next to the model picker, to enable project saves."
               )}
-
-              {github.repo ? (
-                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-white/35">
-                  <a
-                    href={repoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    Open repository →
-                  </a>
-                  {github.lastSync ? (
-                    <span>
-                      Last save:{" "}
-                      {github.lastSync.at
-                        ? new Date(github.lastSync.at).toLocaleString()
-                        : "just now"}{" "}
-                      · {github.lastSync.files} file
-                      {github.lastSync.files === 1 ? "" : "s"} ·{" "}
-                      {github.lastSync.branch}
-                      {github.lastSync.url ? (
-                        <>
-                          {" · "}
-                          <a
-                            href={github.lastSync.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary hover:underline"
-                          >
-                            View commit
-                          </a>
-                        </>
-                      ) : null}
-                    </span>
-                  ) : (
-                    <span>No saves yet.</span>
-                  )}
-                </div>
-              ) : null}
-            </div>
+            </p>
           </div>
         )}
 

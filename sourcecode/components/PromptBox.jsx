@@ -1,4 +1,5 @@
 import { assets } from "@/assets/assets";
+import GitHubRepoPicker from "@/components/GitHubRepoPicker";
 import ModelPicker from "@/components/ModelPicker";
 import {
   describeProviderError,
@@ -9,8 +10,10 @@ import {
   isTransientProviderError,
   isUnavailableModel,
 } from "@/config/providers";
+import { getGitHubContext } from "@/config/github";
 import { needsLanguageRetry, needsUsefulReply, withLanguageRule } from "@/config/language";
 import { useAppContext } from "@/context/AppContext";
+import { useGitHub } from "@/context/GitHubContext";
 import Image from "next/image";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
@@ -25,10 +28,12 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
     renameChat,
     updateChat,
   } = useAppContext();
+  const { github } = useGitHub();
 
   const provider = activeKey ? getProvider(activeKey.provider) : null;
   const model = getKeyModel(activeKey);
   const sampling = getModelSampling(model);
+  const workspaceContext = getGitHubContext(github);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -306,7 +311,9 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
         .slice(-20)
         .map(({ role, content }) => ({ role, content }));
 
-      const reply = await runCompletion(withLanguageRule(history, text));
+      const reply = await runCompletion(
+        withLanguageRule(history, text, false, workspaceContext)
+      );
 
       // Arabic-first models such as Groq's allam-2-7b can ignore the system
       // rule, and small models sometimes just echo the user's words. Retry
@@ -314,7 +321,9 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
       if (needsLanguageRetry(text, reply) || needsUsefulReply(text, reply)) {
         reader = null;
         setAssistantText("");
-        await runCompletion(withLanguageRule(history, text, true));
+        await runCompletion(
+          withLanguageRule(history, text, true, workspaceContext)
+        );
       }
     } catch (error) {
       if (reader) reader.cancel().catch(() => {});
@@ -351,7 +360,11 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
       />
 
       <div className="flex items-center justify-between gap-3 text-sm">
-        <ModelPicker />
+        <div className="flex min-w-0 items-center gap-1.5">
+          <ModelPicker />
+          <span className="h-3.5 w-px shrink-0 bg-white/10" />
+          <GitHubRepoPicker />
+        </div>
 
         <button
           type="submit"

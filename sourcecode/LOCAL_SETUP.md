@@ -16,11 +16,12 @@ Open http://localhost:3000, click **API keys** in the sidebar (or go to
 http://localhost:3000/dashboard), and add a free key from Groq, Google Gemini or
 OpenRouter. Chats and keys are saved in this browser's `localStorage`.
 
-The same dashboard has a **Project repository** card. Paste a GitHub personal
-access token to connect, choose or create a repository, set the branch, and use
-**Test save** to confirm writes. Generated project files are committed through
-`saveProjectFiles()` in `context/GitHubContext.jsx`; the token is stored in this
-browser and is only sent to `api.github.com`.
+The same dashboard has a **GitHub** card. Paste a personal access token to
+connect; the token is stored in this browser and is only sent to
+`api.github.com`. Then choose or create the project repository, branch and
+access from the repository menu next to the model picker under the chat box.
+Generated project files are committed through `saveProjectFiles()` in
+`context/GitHubContext.jsx`.
 
 Back in the chat, click the model name under the message box to switch models
 for the active key. The menu is fetched live from the provider, searchable, and
@@ -35,9 +36,11 @@ marks free models.
   `context/AppContext.jsx` and persisted to `localStorage`.
 - Added a `/dashboard` page and `components/dashboard/*` for managing multiple
   provider keys, models and the active key.
-- Added `config/github.js`, `context/GitHubContext.jsx` and
-  `components/dashboard/GitHubCard.jsx` for browser-to-GitHub repo saves using a
-  personal access token. No GitHub OAuth backend or server token exchange.
+- Added `config/github.js`, `context/GitHubContext.jsx`,
+  `components/dashboard/GitHubCard.jsx` and `components/GitHubRepoPicker.jsx`
+  for browser-to-GitHub repo saves using a personal access token. The dashboard
+  handles the connection; the chat box handles repository, branch and access.
+  No GitHub OAuth backend or server token exchange.
 - Models are loaded at runtime from each provider's official `/models` endpoint;
   no model IDs are hardcoded.
 - Added `/api/free-models`, a cached read-only parser for Google's public
@@ -87,13 +90,19 @@ or use "Clear site data" in the browser.
   Fine-grained tokens need **Contents: read and write** for the target
   repository (and **Administration** if Vexora should create repositories).
   A classic token with the `repo` scope also works.
-- Paste the token into **Project repository → Connect GitHub** on the dashboard.
-  The token is validated with `GET /user` and stored in `vexora:github`; it is
-  never sent to a Vexora server.
-- Choose an existing repository or create one. Vexora uses the Git Data API
+- Paste the token into **GitHub → Connect GitHub** on the dashboard. The token
+  is validated with `GET /user` and stored in `vexora:github`; it is never sent
+  to a Vexora server.
+- Choose an existing repository or create one from the repository menu next to
+  the model picker under the chat box. Vexora uses the Git Data API
   (blobs → tree → commit → ref) to save all files in one commit on the selected
   branch.
-- **Test save** writes `.vexora/connection.json` to prove the token can commit.
+- **Check access** confirms the token can push, and **Test save** writes
+  `.vexora/connection.json` to prove the token can commit.
+- The model receives the connected account, repository, branch and access status
+  as workspace context, so it knows where project files belong. It is told not
+  to claim a save happened unless the app confirms it. The GitHub token is never
+  included in the AI request.
 - Later code-generation flows call `saveProjectFiles(files, message)` from
   `useGitHub()`; `files` is an array of `{ path, content }`.
 

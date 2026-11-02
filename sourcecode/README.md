@@ -16,9 +16,11 @@ multiple providers:
 
 - **API key dashboard** - add and manage keys for Groq, Google Gemini,
   OpenRouter, or any OpenAI-compatible endpoint.
-- **GitHub project saving** - connect with a personal access token, then choose
-  or create a repository and commit a whole project in one commit. The token is
-  stored locally and sent only to `api.github.com`.
+- **GitHub project saving** - connect a personal access token in the dashboard,
+  then pick or create the repository from the chat box next to the model
+  picker. Files are committed in one commit, and the chat is told which
+  repository and branch it is working with. The token is stored locally and
+  sent only to `api.github.com`.
 - **One active key** - switch provider only when you need to; every chat uses
   the active key, provider and model.
 - **Dynamic model discovery** - models load automatically from each provider's
@@ -116,6 +118,7 @@ vexora/
 │   │   ├── KeyCard.jsx
 │   │   └── KeyModal.jsx
 │   ├── ChatLabel.jsx
+│   ├── GitHubRepoPicker.jsx # repo, branch and access menu in the chat box
 │   ├── Message.jsx
 │   ├── ModelPicker.jsx  # live model menu under the chat box
 │   ├── PromptBox.jsx
@@ -137,6 +140,9 @@ vexora/
 - The GitHub connection is saved under `vexora:github`: the personal access
   token, connected account, selected repository/branch and last save. The token
   is sent **only** to `api.github.com`.
+- The connected GitHub account, repository, branch and access status are added
+  to chat requests as workspace context so the model knows where project files
+  belong. The GitHub token itself is never included in those requests.
 - Older `vexora:settings` and `deepseek-clone:*` data is migrated automatically
   on first load.
 - Keys are sent **only** to the provider you selected.
@@ -177,11 +183,17 @@ vexora/
   is temporarily unavailable, Vexora shows all available models and warns you in
   the key dialog instead of guessing.
 - GitHub saves use the Git Data API (blobs → tree → commit → ref), so generated
-  files land as one commit. A fine-grained token needs **Contents: read and
-  write** on the repository; a classic token needs the `repo` scope. Add
+  files land as one commit. Pick the repository and branch from the menu next to
+  the model picker in the chat box. A fine-grained token needs **Contents: read
+  and write** on the repository; a classic token needs the `repo` scope. Add
   **Administration** (fine-grained) or use `repo` (classic) if Vexora should
-  create repositories. Use **Test save** in the dashboard to verify the whole
-  write path; it commits `.vexora/connection.json`.
+  create repositories. Use **Check access** to confirm push permission and
+  **Test save** to commit `.vexora/connection.json` and verify the full write
+  path.
+- The chat sends the connected account, repository, branch and access status to
+  the model as workspace context, so replies know where project files belong.
+  The model is also told never to claim a save happened unless the app confirms
+  it.
 - Free-tier rules are provider-side and rate-limited. A model listed as free can
   still return quota errors.
 - Some model names are plan-specific, so always prefer the live list if a request

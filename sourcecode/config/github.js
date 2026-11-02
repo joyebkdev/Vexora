@@ -167,6 +167,39 @@ export async function validateToken(token) {
   };
 }
 
+// Text injected into the chat system prompt so the model knows which workspace
+// and repository it is helping with. Returns an empty string when GitHub is not
+// connected, so chats that do not use GitHub stay unchanged.
+export const getGitHubContext = (github) => {
+  const user = github?.user;
+  if (!user?.login) return "";
+
+  const repo = github?.repo;
+  if (!repo?.owner || !repo?.name) {
+    return (
+      `Workspace context: GitHub is connected as @${user.login}, but no project ` +
+      "repository is selected yet. The user can choose one from the repository " +
+      "menu next to the model picker under the chat box."
+    );
+  }
+
+  const access =
+    repo.canPush === true
+      ? "Write access is confirmed"
+      : repo.canPush === false
+        ? "The token is read-only, so project files cannot be committed until it gets write access"
+        : "Write access has not been checked yet";
+  const branch = repo.branch || repo.defaultBranch || "main";
+
+  return (
+    `Workspace context: GitHub is connected as @${user.login}. The selected ` +
+    `project repository is ${repo.owner}/${repo.name} on branch ${branch}. ` +
+    `${access}. Generated project files can be committed to this repository. ` +
+    "When you share project code, include complete file paths. Never claim a " +
+    "file was saved unless the app confirms it."
+  );
+};
+
 export async function listRepositories(token) {
   const repos = await githubRequest(
     "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member",

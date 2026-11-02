@@ -163,17 +163,24 @@ export const getLanguageInstruction = (latestUserMessage) => {
 // `retry` is used for the single retry: it repeats the rule as a hard
 // requirement and appends a short reminder to the last user turn, because
 // small models often follow the final user message more closely than the
-// system prompt.
-export const withLanguageRule = (messages, latestUserMessage, retry = false) => {
+// system prompt. `extraContext` carries workspace context such as the connected
+// GitHub repository.
+export const withLanguageRule = (
+  messages,
+  latestUserMessage,
+  retry = false,
+  extraContext = ""
+) => {
   const language = detectLanguage(latestUserMessage);
   const instruction = getLanguageInstruction(latestUserMessage);
-  const system = retry
+  const base = retry
     ? "You are Vexora, a helpful assistant. Your previous reply was not a good " +
       "answer. Reply again in a complete, useful way. Do not repeat the user's " +
       `message or reply with only a greeting. ${instruction}`
     : "You are Vexora, a helpful assistant. Reply with a complete, useful " +
       "answer. Never repeat the user's message or reply with only a greeting. " +
       instruction;
+  const system = extraContext ? `${base}\n\n${extraContext}` : base;
 
   const prepared = messages.map((message) => ({ ...message }));
   const last = prepared[prepared.length - 1];
