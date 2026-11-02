@@ -115,6 +115,11 @@ or use "Clear site data" in the browser.
   that claims a save without returning file blocks gets a "Nothing was
   committed" card instead. Failed commits can be retried from the card with
   **Retry commit**.
+- File blocks use four backticks so code fences inside the file (common in
+  READMEs and docs) are not treated as the end of the file. If a block still
+  looks cut off at an unclosed fence, or would shrink an existing 500+ character
+  file below 60% of its length, Vexora holds it for review instead of committing
+  and requires **Commit anyway**.
 - Later code-generation flows call `saveProjectFiles(files, message)` from
   `useGitHub()`; `files` is an array of `{ path, content }`.
 

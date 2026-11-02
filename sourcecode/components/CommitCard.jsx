@@ -32,6 +32,11 @@ const STATUS = {
     title: "text-white",
     className: "border-primary/25 bg-primary/5",
   },
+  review: {
+    dot: "bg-amber-400",
+    title: "text-amber-200",
+    className: "border-amber-400/25 bg-amber-400/5",
+  },
   unchanged: {
     dot: "bg-white/40",
     title: "text-white/80",
@@ -112,6 +117,13 @@ const CommitCard = ({ action, chatId, messageId }) => {
     }
     if (action.status === "blocked") {
       return "Nothing was committed — the token is read-only";
+    }
+    if (action.status === "review") {
+      const first = action.warnings?.[0];
+      if (!first) return "Review before committing";
+      return first.reason === "fence"
+        ? `Review before committing — ${first.path} looks cut off`
+        : `Review before committing — ${first.path} is much shorter`;
     }
     if (action.status === "unchanged") {
       return "No commit — nothing was saved";
@@ -234,9 +246,12 @@ const CommitCard = ({ action, chatId, messageId }) => {
               >
                 {busy
                   ? "Committing…"
-                  : action.status === "failed" || action.status === "blocked"
-                    ? "Retry commit"
-                    : "Commit to GitHub"}
+                  : action.status === "review"
+                    ? "Commit anyway"
+                    : action.status === "failed" ||
+                        action.status === "blocked"
+                      ? "Retry commit"
+                      : "Commit to GitHub"}
               </button>
             ) : null}
           </div>

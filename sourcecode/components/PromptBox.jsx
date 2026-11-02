@@ -420,8 +420,40 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
 
       if (parsed.hasChanges) {
         const stored = toStoredChanges(parsed);
-        const commitMessage =
-          `Vexora: ${text.replace(/\s+/g, " ").trim()}`.slice(0, 72);
+        const commitMessage = `Vexora: ${text.replace(/\s+/g, " ").trim()}`.slice(
+          0,
+          72
+        );
+
+        // A truncated file block can silently delete most of a real file.
+        // Ask for confirmation when content looks cut off at a code fence or
+        // when a large existing file would be replaced by far less content.
+        const snapshotFiles = new Map(
+          (snapshot?.files || []).map((file) => [file.path, file])
+        );
+        const reviewWarnings = [];
+        parsed.files.forEach((file) => {
+          if (file.suspiciousFence) {
+            reviewWarnings.push({
+              path: file.path,
+              reason: "fence",
+              after: file.content.length,
+            });
+            return;
+          }
+
+          const previous = snapshotFiles.get(file.path);
+          if (!previous || previous.truncated) return;
+          if (previous.content.length < 500) return;
+          if (file.content.length >= previous.content.length * 0.6) return;
+
+          reviewWarnings.push({
+            path: file.path,
+            reason: "shorter",
+            before: previous.content.length,
+            after: file.content.length,
+          });
+        });
 
         const action = appendMessage(chat.id, {
           role: "action",
@@ -437,6 +469,7 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
             paths: stored.paths,
             deletedPaths: stored.deletions,
             omitted: stored.omitted,
+            warnings: reviewWarnings,
             message: commitMessage,
             result: null,
             error: "",
@@ -459,6 +492,15 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
             status: "blocked",
             error:
               "The token is read-only, so nothing was committed. Use a token with Contents read and write access.",
+          });
+        } else if (reviewWarnings.length) {
+          const first = reviewWarnings[0];
+          patch({
+            status: "review",
+            error:
+              first.reason === "fence"
+                ? `${first.path} looks cut off at a code fence. Nothing has been committed — review the prepared file, then choose "Commit anyway" if it is complete.`
+                : `${first.path} would be replaced with ${first.after} characters, down from ${first.before}. Nothing has been committed — review the prepared file, then choose "Commit anyway" if that is intended.`,
           });
         } else {
           try {

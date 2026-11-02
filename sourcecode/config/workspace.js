@@ -3,18 +3,21 @@
 // to change project files, parses those blocks out of a reply, and adds the
 // rules that keep the model from claiming work the app has not confirmed.
 //
-// Protocol (one block per file):
+// Protocol (one block per file). Four backticks are required so a file that
+// itself contains three-backtick code fences (a README, for example) is not
+// cut off at the first inner fence:
 //
-//   ```vexora-file path=src/App.jsx
+//   ````vexora-file path=src/App.jsx
 //   ...complete file content...
-//   ```
+//   ````
 //
-//   ```vexora-delete path=old/file.js
-//   ```
+//   ````vexora-delete path=old/file.js
+//   ````
 
 import { getGitHubContext } from "@/config/github";
 
-const BLOCK = /```[ \t]*vexora-(file|delete)\b([^\n]*)\r?\n([\s\S]*?)```/gi;
+const BLOCK_OPEN = /^(`{3,})[ \t]*vexora-(file|delete)\b([^\n]*)$/i;
+const BLOCK_CLOSE = /^(`{3,})[ \t]*$/;
 
 const STORAGE_LIMIT = 200_000;
 
@@ -62,15 +65,37 @@ const readDeletePaths = (attributes, content) => {
 // Vexora only commits what the model finished writing.
 export const parseWorkspaceChanges = (reply) => {
   const source = String(reply || "");
+  const lines = source.split(/\r?\n/);
+  const keep = new Array(lines.length).fill(true);
   const files = new Map();
   const deletions = new Set();
+  let unterminated = false;
 
-  const pattern = new RegExp(BLOCK.source, "gi");
-  let match;
-  while ((match = pattern.exec(source))) {
-    const kind = match[1].toLowerCase();
-    const attributes = match[2] || "";
-    let body = match[3] || "";
+  for (let index = 0; index < lines.length; index++) {
+    const open = lines[index].match(BLOCK_OPEN);
+    if (!open) continue;
+
+    const fenceLength = open[1].length;
+    let closeIndex = -1;
+    for (let scan = index + 1; scan < lines.length; scan++) {
+      const close = lines[scan].match(BLOCK_CLOSE);
+      // Only a fence at least as long as the opener can close the block. This
+      // lets a four-backtick block contain ordinary three-backtick code.
+      if (close && close[1].length >= fenceLength) {
+        closeIndex = scan;
+        break;
+      }
+    }
+
+    if (closeIndex === -1) {
+      // Never guess the end of an unfinished file.
+      unterminated = true;
+      break;
+    }
+
+    const kind = open[2].toLowerCase();
+    const attributes = open[3] || "";
+    let body = lines.slice(index + 1, closeIndex).join("\n");
 
     // Some models put the path directive on the first line of the body
     // instead of the header line.
@@ -87,21 +112,27 @@ export const parseWorkspaceChanges = (reply) => {
       readDeletePaths(path || attributes, body).forEach((item) =>
         deletions.add(item)
       );
-      continue;
+    } else if (path) {
+      // A file whose own code fences are unbalanced was probably cut off by
+      // an outer three-backtick fence. Flag it so the app asks before saving.
+      const fenceLines = (body.match(/^`{3,}[^\n]*$/gm) || []).length;
+      files.set(path, {
+        path,
+        content: body.replace(/\n$/, ""),
+        suspiciousFence: fenceLines % 2 === 1,
+      });
     }
 
-    if (!path) continue;
-    files.set(path, {
-      path,
-      content: body.replace(/\r\n/g, "\n").replace(/\n$/, ""),
-    });
+    for (let line = index; line <= closeIndex; line++) keep[line] = false;
+    index = closeIndex;
   }
 
   // A file that is written also exists, so a delete for the same path loses.
   files.forEach((_file, path) => deletions.delete(path));
 
-  const cleaned = source
-    .replace(new RegExp(BLOCK.source, "gi"), "")
+  const cleaned = lines
+    .filter((_line, index) => keep[index])
+    .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
@@ -113,6 +144,7 @@ export const parseWorkspaceChanges = (reply) => {
     deletions: deletionList,
     paths: fileList.map((file) => file.path),
     text: cleaned,
+    unterminated,
     hasChanges: fileList.length > 0 || deletionList.length > 0,
   };
 };
@@ -154,24 +186,26 @@ const accessRule = `Access: Vexora, not you, holds the user's GitHub token and p
 
 const writeRules = (repo) => `${accessRule}
 
-Project files: the user's workspace is ${repo.owner}/${repo.name} on branch ${repo.branch}. When the user asks you to create or change project files, write each file as its own fenced block with this exact header:
+Project files: the user's workspace is ${repo.owner}/${repo.name} on branch ${repo.branch}. When the user asks you to create or change project files, write each file as its own fenced block. Use FOUR backticks for the outer fence so code fences inside the file survive:
 
-\`\`\`vexora-file path=<repository-relative path>
+\`\`\`\`vexora-file path=<repository-relative path>
 <complete file content>
-\`\`\`
+\`\`\`\`
 
-To delete a file, use:
+To delete a file, use a four-backtick block too:
 
-\`\`\`vexora-delete path=<repository-relative path>
-\`\`\`
+\`\`\`\`vexora-delete path=<repository-relative path>
+\`\`\`\`
 
 Rules:
+- Always use four backticks around a file block, even when the file itself contains three-backtick code blocks. Never put four backticks inside the file content.
 - Only emit a block for a file you are actually changing, and include the whole file, never a diff or a fragment.
 - Use relative paths with forward slashes. Never use absolute paths, drive letters or "..".
 - Vexora applies these blocks and commits them to the selected branch. You cannot run git, commit or push on your own.
 - Never say files were saved, committed, pushed or finished, and never invent commit hashes or links. The app appends the real commit result after it runs.
 - When changing an existing file, start from the snapshot content and return the complete updated file. Never ask the user to paste a file that is already in the snapshot.
 - If a file you need is not in the snapshot, say Vexora did not include it and ask for it by path. Never guess its contents.
+- Put a short summary before the blocks, and do not repeat file contents outside the blocks.
 - Do not emit file blocks when you are only explaining, reviewing or answering a question.`;
 
 export const formatRepositorySnapshot = (snapshot, error = "") => {

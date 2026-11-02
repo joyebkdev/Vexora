@@ -201,13 +201,18 @@ vexora/
   it.
 - **How a save actually happens:** the model cannot run git. When it wants to
   change files it must return one `vexora-file path=...` fenced block per file
-  (and `vexora-delete path=...` for removals). Vexora parses those blocks, hides
-  them from the prose, commits them with the Git Data API, and then shows an
-  app-generated card with the real commit SHA, branch, file list and a link to
-  the commit on GitHub. The card is the only confirmation; if a reply claims a
-  save but returns no file blocks, Vexora marks it "Nothing was committed" and
-  shows no commit link. Failed commits keep the prepared files so **Retry
-  commit** can run again.
+  (and `vexora-delete path=...` for removals). Blocks use **four backticks** so
+  three-backtick code inside a README or docs file survives. Vexora parses those
+  blocks, hides them from the prose, commits them with the Git Data API, and
+  then shows an app-generated card with the real commit SHA, branch, file list
+  and a link to the commit on GitHub. The card is the only confirmation; if a
+  reply claims a save but returns no file blocks, Vexora marks it "Nothing was
+  committed" and shows no commit link. Failed commits keep the prepared files so
+  **Retry commit** can run again.
+- **Truncation guard:** if a file block looks cut off at an unclosed code fence,
+  or would replace an existing file of 500+ characters with less than 60% of its
+  previous length, Vexora does **not** commit automatically. The card says
+  "Review before committing", shows the file, and waits for **Commit anyway**.
 - **Reading the project:** before each reply, Vexora reads the selected branch
   (Git tree plus a small text snapshot) so the model can append to or modify
   existing files instead of asking you to paste them. It prioritizes README,
