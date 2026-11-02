@@ -16,6 +16,9 @@ multiple providers:
 
 - **API key dashboard** - add and manage keys for Groq, Google Gemini,
   OpenRouter, or any OpenAI-compatible endpoint.
+- **GitHub project saving** - connect with a personal access token, then choose
+  or create a repository and commit a whole project in one commit. The token is
+  stored locally and sent only to `api.github.com`.
 - **One active key** - switch provider only when you need to; every chat uses
   the active key, provider and model.
 - **Dynamic model discovery** - models load automatically from each provider's
@@ -109,6 +112,7 @@ vexora/
 ├── assets/              # SVG icons and images
 ├── components/
 │   ├── dashboard/
+│   │   ├── GitHubCard.jsx
 │   │   ├── KeyCard.jsx
 │   │   └── KeyModal.jsx
 │   ├── ChatLabel.jsx
@@ -117,9 +121,11 @@ vexora/
 │   ├── PromptBox.jsx
 │   └── Sidebar.jsx
 ├── config/
+│   ├── github.js        # browser-to-GitHub token, repo and commit helpers
 │   └── providers.js     # providers, endpoints, model discovery
 ├── context/
-│   └── AppContext.jsx   # chats + API keys + localStorage persistence
+│   ├── AppContext.jsx   # chats + API keys + localStorage persistence
+│   └── GitHubContext.jsx # GitHub connection, repo and project saves
 └── package.json
 ```
 
@@ -128,13 +134,17 @@ vexora/
 - Chats are saved under `vexora:chats` in `localStorage`.
 - API keys are saved under `vexora:api-keys`; the selected key id is stored
   under `vexora:active-key`.
+- The GitHub connection is saved under `vexora:github`: the personal access
+  token, connected account, selected repository/branch and last save. The token
+  is sent **only** to `api.github.com`.
 - Older `vexora:settings` and `deepseek-clone:*` data is migrated automatically
   on first load.
 - Keys are sent **only** to the provider you selected.
 - `/api/free-models` fetches Google's public Gemini pricing page on the server
   and caches the parsed free-model list for six hours. It never receives or
   stores API keys.
-- Clearing site data in your browser removes all chats and saved keys.
+- Clearing site data in your browser removes all chats and saved keys, and
+  disconnects GitHub.
 - Chats and keys stay in your browser; there is no server-side history or
   shared database.
 
@@ -166,6 +176,12 @@ vexora/
   (https://ai.google.dev/gemini-api/docs/pricing). If Google changes the page or
   is temporarily unavailable, Vexora shows all available models and warns you in
   the key dialog instead of guessing.
+- GitHub saves use the Git Data API (blobs → tree → commit → ref), so generated
+  files land as one commit. A fine-grained token needs **Contents: read and
+  write** on the repository; a classic token needs the `repo` scope. Add
+  **Administration** (fine-grained) or use `repo` (classic) if Vexora should
+  create repositories. Use **Test save** in the dashboard to verify the whole
+  write path; it commits `.vexora/connection.json`.
 - Free-tier rules are provider-side and rate-limited. A model listed as free can
   still return quota errors.
 - Some model names are plan-specific, so always prefer the live list if a request

@@ -1,4 +1,5 @@
 "use client";
+import GitHubCard from "@/components/dashboard/GitHubCard";
 import KeyCard from "@/components/dashboard/KeyCard";
 import KeyModal from "@/components/dashboard/KeyModal";
 import { PROVIDERS, getProvider } from "@/config/providers";
@@ -129,6 +130,8 @@ export default function DashboardPage() {
           />
         </div>
 
+        <GitHubCard />
+
         <section className="mt-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">
@@ -170,8 +173,8 @@ export default function DashboardPage() {
               </div>
               <p className="mt-4 font-medium">No API keys yet</p>
               <p className="mx-auto mt-1 max-w-md text-sm text-white/40">
-                Add a free key from Groq, Google Gemini, OpenRouter, Cerebras,
-                or Mistral to start chatting.
+                Add a free key from Groq, Google Gemini, or OpenRouter to start
+                chatting.
               </p>
               <button
                 type="button"

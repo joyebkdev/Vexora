@@ -16,6 +16,12 @@ Open http://localhost:3000, click **API keys** in the sidebar (or go to
 http://localhost:3000/dashboard), and add a free key from Groq, Google Gemini or
 OpenRouter. Chats and keys are saved in this browser's `localStorage`.
 
+The same dashboard has a **Project repository** card. Paste a GitHub personal
+access token to connect, choose or create a repository, set the branch, and use
+**Test save** to confirm writes. Generated project files are committed through
+`saveProjectFiles()` in `context/GitHubContext.jsx`; the token is stored in this
+browser and is only sent to `api.github.com`.
+
 Back in the chat, click the model name under the message box to switch models
 for the active key. The menu is fetched live from the provider, searchable, and
 marks free models.
@@ -29,6 +35,9 @@ marks free models.
   `context/AppContext.jsx` and persisted to `localStorage`.
 - Added a `/dashboard` page and `components/dashboard/*` for managing multiple
   provider keys, models and the active key.
+- Added `config/github.js`, `context/GitHubContext.jsx` and
+  `components/dashboard/GitHubCard.jsx` for browser-to-GitHub repo saves using a
+  personal access token. No GitHub OAuth backend or server token exchange.
 - Models are loaded at runtime from each provider's official `/models` endpoint;
   no model IDs are hardcoded.
 - Added `/api/free-models`, a cached read-only parser for Google's public
@@ -64,12 +73,29 @@ winget install --id Microsoft.VCRedist.2015+.arm64
 | `vexora:selected-chat` | Last selected chat id |
 | `vexora:api-keys` | Saved provider keys, labels, endpoints and models |
 | `vexora:active-key` | Id of the key currently used by the chat |
+| `vexora:github` | GitHub PAT, connected account, repo/branch and last save |
 
 Older `vexora:settings` and `deepseek-clone:*` data is migrated automatically to
 these keys the first time Vexora loads.
 
 To wipe everything: DevTools → Application → Local Storage → delete the keys,
 or use "Clear site data" in the browser.
+
+## GitHub project saving
+
+- Create a token at https://github.com/settings/personal-access-tokens/new.
+  Fine-grained tokens need **Contents: read and write** for the target
+  repository (and **Administration** if Vexora should create repositories).
+  A classic token with the `repo` scope also works.
+- Paste the token into **Project repository → Connect GitHub** on the dashboard.
+  The token is validated with `GET /user` and stored in `vexora:github`; it is
+  never sent to a Vexora server.
+- Choose an existing repository or create one. Vexora uses the Git Data API
+  (blobs → tree → commit → ref) to save all files in one commit on the selected
+  branch.
+- **Test save** writes `.vexora/connection.json` to prove the token can commit.
+- Later code-generation flows call `saveProjectFiles(files, message)` from
+  `useGitHub()`; `files` is an array of `{ path, content }`.
 
 ## Provider notes
 
