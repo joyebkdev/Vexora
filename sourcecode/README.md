@@ -118,6 +118,7 @@ vexora/
 │   │   ├── KeyCard.jsx
 │   │   └── KeyModal.jsx
 │   ├── ChatLabel.jsx
+│   ├── CommitCard.jsx   # app-confirmed commit result and retry
 │   ├── GitHubRepoPicker.jsx # repo, branch and access menu in the chat box
 │   ├── Message.jsx
 │   ├── ModelPicker.jsx  # live model menu under the chat box
@@ -125,7 +126,8 @@ vexora/
 │   └── Sidebar.jsx
 ├── config/
 │   ├── github.js        # browser-to-GitHub token, repo and commit helpers
-│   └── providers.js     # providers, endpoints, model discovery
+│   ├── providers.js     # providers, endpoints, model discovery
+│   └── workspace.js     # file-block protocol, parser and save-claim checks
 ├── context/
 │   ├── AppContext.jsx   # chats + API keys + localStorage persistence
 │   └── GitHubContext.jsx # GitHub connection, repo and project saves
@@ -194,6 +196,15 @@ vexora/
   the model as workspace context, so replies know where project files belong.
   The model is also told never to claim a save happened unless the app confirms
   it.
+- **How a save actually happens:** the model cannot run git. When it wants to
+  change files it must return one `vexora-file path=...` fenced block per file
+  (and `vexora-delete path=...` for removals). Vexora parses those blocks, hides
+  them from the prose, commits them with the Git Data API, and then shows an
+  app-generated card with the real commit SHA, branch, file list and a link to
+  the commit on GitHub. The card is the only confirmation; if a reply claims a
+  save but returns no file blocks, Vexora marks it "Nothing was committed" and
+  shows no commit link. Failed commits keep the prepared files so **Retry
+  commit** can run again.
 - Free-tier rules are provider-side and rate-limited. A model listed as free can
   still return quota errors.
 - Some model names are plan-specific, so always prefer the live list if a request

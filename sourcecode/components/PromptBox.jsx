@@ -10,7 +10,12 @@ import {
   isTransientProviderError,
   isUnavailableModel,
 } from "@/config/providers";
-import { getGitHubContext } from "@/config/github";
+import {
+  claimsUnconfirmedSave,
+  getWorkspacePrompt,
+  parseWorkspaceChanges,
+  toStoredChanges,
+} from "@/config/workspace";
 import { needsLanguageRetry, needsUsefulReply, withLanguageRule } from "@/config/language";
 import { useAppContext } from "@/context/AppContext";
 import { useGitHub } from "@/context/GitHubContext";
@@ -28,12 +33,12 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
     renameChat,
     updateChat,
   } = useAppContext();
-  const { github } = useGitHub();
+  const { github, saveProjectFiles } = useGitHub();
 
   const provider = activeKey ? getProvider(activeKey.provider) : null;
   const model = getKeyModel(activeKey);
   const sampling = getModelSampling(model);
-  const workspaceContext = getGitHubContext(github);
+  const workspaceContext = getWorkspacePrompt(github);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -107,6 +112,15 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
         ...current,
         messages: current.messages.map((message) =>
           message.id === assistantId ? { ...message, content } : message
+        ),
+      }));
+    };
+
+    const updateMessage = (id, patch) => {
+      updateChat(chat.id, (current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === id ? { ...message, ...patch } : message
         ),
       }));
     };
@@ -311,19 +325,138 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
         .slice(-20)
         .map(({ role, content }) => ({ role, content }));
 
+      // Paths committed earlier in this chat help the model keep the project
+      // structure consistent without resending every file.
+      const committedPaths = [
+        ...new Set(
+          chat.messages
+            .filter((message) => message.action?.result)
+            .flatMap((message) => message.action.paths || [])
+        ),
+      ].slice(-40);
+      const systemContext = committedPaths.length
+        ? `${workspaceContext}\n\nFiles already committed in this chat: ${committedPaths.join(
+            ", "
+          )}.`
+        : workspaceContext;
+
       const reply = await runCompletion(
-        withLanguageRule(history, text, false, workspaceContext)
+        withLanguageRule(history, text, false, systemContext)
       );
 
       // Arabic-first models such as Groq's allam-2-7b can ignore the system
       // rule, and small models sometimes just echo the user's words. Retry
       // once with the rule repeated instead of showing that as the answer.
+      let finalReply = reply;
       if (needsLanguageRetry(text, reply) || needsUsefulReply(text, reply)) {
         reader = null;
         setAssistantText("");
-        await runCompletion(
-          withLanguageRule(history, text, true, workspaceContext)
+        finalReply = await runCompletion(
+          withLanguageRule(history, text, true, systemContext)
         );
+      }
+
+      // The model cannot write to GitHub by itself. It returns file blocks and
+      // Vexora commits them here, then reports the real result. Nothing is
+      // claimed until GitHub returns a commit.
+      const parsed = parseWorkspaceChanges(finalReply);
+
+      if (assistantId && parsed.text !== finalReply) {
+        const summary = parsed.hasChanges
+          ? parsed.text ||
+            `Prepared ${parsed.files.length} file${
+              parsed.files.length === 1 ? "" : "s"
+            } to commit${github.repo ? ` to ${github.repo.owner}/${github.repo.name}` : ""}.`
+          : parsed.text;
+        updateMessage(assistantId, { content: summary });
+        displayed = summary;
+      }
+
+      if (parsed.hasChanges) {
+        const stored = toStoredChanges(parsed);
+        const commitMessage =
+          `Vexora: ${text.replace(/\s+/g, " ").trim()}`.slice(0, 72);
+
+        const action = appendMessage(chat.id, {
+          role: "action",
+          content: "",
+          timestamp: Date.now(),
+          action: {
+            status: "pending",
+            owner: github.repo?.owner || "",
+            repo: github.repo?.name || "",
+            branch: github.repo?.branch || "",
+            files: stored.files,
+            deletions: stored.deletions,
+            paths: stored.paths,
+            deletedPaths: stored.deletions,
+            omitted: stored.omitted,
+            message: commitMessage,
+            result: null,
+            error: "",
+          },
+        });
+        const pendingAction = action.action;
+
+        const patch = (next) =>
+          updateMessage(action.id, {
+            action: { ...pendingAction, ...next },
+          });
+
+        if (!github.token || !github.user || !github.repo) {
+          patch({
+            status: "ready",
+            error: "No repository is selected, so nothing was committed.",
+          });
+        } else if (github.repo.canPush === false) {
+          patch({
+            status: "blocked",
+            error:
+              "The token is read-only, so nothing was committed. Use a token with Contents read and write access.",
+          });
+        } else {
+          try {
+            const result = await saveProjectFiles(
+              parsed.files,
+              commitMessage,
+              { deletions: parsed.deletions }
+            );
+            patch({ status: "committed", result, error: "" });
+            toast.success(
+              `Committed ${result.files} file${
+                result.files === 1 ? "" : "s"
+              } to ${result.branch}`
+            );
+          } catch (commitError) {
+            patch({ status: "failed", error: commitError.message });
+            toast.error(`GitHub: ${commitError.message}`);
+          }
+        }
+      } else if (github.repo && claimsUnconfirmedSave(parsed.text)) {
+        // The reply talked about saving or pushing but returned no file
+        // blocks, so no commit could happen. State that plainly instead of
+        // letting the claim stand.
+        if (assistantId) {
+          const notice =
+            "> Nothing was committed by this reply.\n\n";
+          updateMessage(assistantId, { content: `${notice}${parsed.text}` });
+          displayed = parsed.text;
+        }
+        appendMessage(chat.id, {
+          role: "action",
+          content: "",
+          timestamp: Date.now(),
+          action: {
+            status: "unchanged",
+            paths: [],
+            deletedPaths: [],
+            files: [],
+            deletions: [],
+            result: null,
+            error:
+              "The reply did not include file contents, so Vexora did not change or commit anything. Ask it to return the files it wants to write.",
+          },
+        });
       }
     } catch (error) {
       if (reader) reader.cancel().catch(() => {});

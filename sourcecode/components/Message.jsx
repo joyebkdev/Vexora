@@ -1,15 +1,26 @@
 import { assets } from "@/assets/assets";
+import CommitCard from "@/components/CommitCard";
 import Image from "next/image";
 import React, { useEffect } from "react";
 import Markdown from "react-markdown";
 import Prism from "prismjs";
 import toast from "react-hot-toast";
 
-const Message = ({ role, content }) => {
+const Message = ({ message, chatId }) => {
+  const { role, content, action } = message || {};
+
   const copyMessage = () => {
-    navigator.clipboard.writeText(content);
+    navigator.clipboard.writeText(content || "");
     toast.success("Message copied to clipboard");
   };
+
+  // App-generated result for a GitHub commit attempt. It is the only place
+  // that states whether files were actually written.
+  if (role === "action") {
+    return (
+      <CommitCard action={action} chatId={chatId} messageId={message.id} />
+    );
+  }
 
   useEffect(() => {
     Prism.highlightAll();

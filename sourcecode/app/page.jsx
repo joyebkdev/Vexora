@@ -67,7 +67,11 @@ export default function Home() {
                 {selectedChat?.name || "New Chat"}
               </p>
               {messages.map((msg, index) => (
-                <Message key={index} role={msg.role} content={msg.content} />
+                <Message
+                  key={msg.id || index}
+                  message={msg}
+                  chatId={selectedChat?.id}
+                />
               ))}
               {isLoading && (
                 <div className="flex gap-4 max-w-3xl w-full py-3">

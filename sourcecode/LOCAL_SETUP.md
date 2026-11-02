@@ -21,7 +21,8 @@ connect; the token is stored in this browser and is only sent to
 `api.github.com`. Then choose or create the project repository, branch and
 access from the repository menu next to the model picker under the chat box.
 Generated project files are committed through `saveProjectFiles()` in
-`context/GitHubContext.jsx`.
+`context/GitHubContext.jsx`: the model returns `vexora-file` blocks and Vexora
+commits them, then `components/CommitCard.jsx` shows the real SHA and link.
 
 Back in the chat, click the model name under the message box to switch models
 for the active key. The menu is fetched live from the provider, searchable, and
@@ -103,6 +104,12 @@ or use "Clear site data" in the browser.
   as workspace context, so it knows where project files belong. It is told not
   to claim a save happened unless the app confirms it. The GitHub token is never
   included in the AI request.
+- The model cannot run git. It returns one `vexora-file path=...` fenced block
+  per file (`vexora-delete path=...` for removals), and Vexora commits those
+  blocks, then appends a card with the real SHA, branch and commit link. A reply
+  that claims a save without returning file blocks gets a "Nothing was
+  committed" card instead. Failed commits can be retried from the card with
+  **Retry commit**.
 - Later code-generation flows call `saveProjectFiles(files, message)` from
   `useGitHub()`; `files` is an array of `{ path, content }`.
 
