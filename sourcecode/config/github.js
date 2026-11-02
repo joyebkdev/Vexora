@@ -177,7 +177,7 @@ export const getGitHubContext = (github) => {
   const repo = github?.repo;
   if (!repo?.owner || !repo?.name) {
     return (
-      `Workspace context: GitHub is connected as @${user.login}, but no project ` +
+      `Workspace context: Vexora is connected to GitHub as @${user.login}, but no project ` +
       "repository is selected yet. The user can choose one from the repository " +
       "menu next to the model picker under the chat box."
     );
@@ -192,11 +192,12 @@ export const getGitHubContext = (github) => {
   const branch = repo.branch || repo.defaultBranch || "main";
 
   return (
-    `Workspace context: GitHub is connected as @${user.login}. The selected ` +
+    `Workspace context: Vexora is connected to GitHub as @${user.login}. The selected ` +
     `project repository is ${repo.owner}/${repo.name} on branch ${branch}. ` +
-    `${access}. Generated project files can be committed to this repository. ` +
-    "When you share project code, include complete file paths. Never claim a " +
-    "file was saved unless the app confirms it."
+    `${access}. Vexora can read this repository's files and, when write access ` +
+    "is available, commit generated files to it. When you share project code, " +
+    "include complete file paths. Never claim a file was saved unless the app " +
+    "confirms it."
   );
 };
 
@@ -421,5 +422,204 @@ export async function saveProjectFiles({
       `https://github.com/${owner}/${repo}/commit/${commit.sha}`,
     files: normalizedFiles.length,
     deleted: deletedPaths.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Repository reads. Vexora sends the model a small snapshot of the selected
+// branch so it can edit existing files (for example append to README.md)
+// instead of asking the user to paste them.
+
+const SKIP_PREFIXES = [
+  "node_modules/",
+  ".next/",
+  ".git/",
+  "dist/",
+  "build/",
+  "out/",
+  "coverage/",
+  "vendor/",
+  "target/",
+];
+
+const SKIP_FILES = new Set([
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "bun.lockb",
+  "composer.lock",
+  "poetry.lock",
+  "Cargo.lock",
+  "go.sum",
+]);
+
+const BINARY_EXTENSION =
+  /\.(png|jpe?g|gif|webp|avif|ico|bmp|tiff?|psd|pdf|zip|gz|tgz|bz2|xz|7z|rar|exe|dll|so|dylib|woff2?|ttf|otf|eot|mp3|wav|ogg|mp4|webm|mov|avi|mkv|wasm|class|jar|bin|dat|db|sqlite)$/i;
+
+const MAX_SNAPSHOT_FILES = 10;
+const MAX_FILE_CHARS = 8000;
+const MAX_TOTAL_CHARS = 24000;
+const MAX_LISTED_PATHS = 200;
+
+const decodeBase64Text = (value) => {
+  const binary = atob(String(value || "").replace(/\s+/g, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new TextDecoder().decode(bytes);
+};
+
+const isSnapshotCandidate = (entry) => {
+  const path = entry.path;
+  if (!path) return false;
+  if (entry.size && entry.size > 400_000) return false;
+  if (
+    SKIP_PREFIXES.some(
+      (prefix) => path.startsWith(prefix) || path.includes(`/${prefix}`)
+    )
+  ) {
+    return false;
+  }
+  if (SKIP_FILES.has(path.split("/").pop())) return false;
+  return !BINARY_EXTENSION.test(path);
+};
+
+const pathScore = (path, terms) => {
+  const lower = path.toLowerCase();
+  const name = lower.split("/").pop();
+  let score = 0;
+  if (terms.some((term) => lower.includes(term))) score -= 40;
+  if (/^readme(\.|$)/.test(name)) score -= 30;
+  if (
+    /^(package\.json|requirements\.txt|pyproject\.toml|cargo\.toml|go\.mod|tsconfig\.json|next\.config\.[a-z]+|vite\.config\.[a-z]+)$/.test(
+      name
+    )
+  ) {
+    score -= 20;
+  }
+  if (/^(license|changelog|contributing)(\.|$)/.test(name)) score -= 10;
+  // Prefer top-level files so the snapshot stays useful.
+  score += path.split("/").length;
+  return score;
+};
+
+/**
+ * Read the selected branch's tree and a small, text-only set of file contents.
+ * Returns `{ empty: true }` for an empty repository or a branch without
+ * commits. The token is only used here, never added to the result.
+ */
+export async function readRepositorySnapshot({
+  token,
+  owner,
+  repo,
+  branch,
+  fallbackBranch = "",
+  focus = "",
+} = {}) {
+  if (!owner || !repo) {
+    throw new GithubError("Choose a repository first.", 400);
+  }
+
+  const targetBranch = cleanBranch(branch);
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  let headSha = await getBranchSha(token, base, targetBranch);
+  let readBranch = targetBranch;
+
+  // A branch that does not exist yet (a new branch Vexora will create on the
+  // next commit) should still see the project it starts from.
+  if (!headSha && fallbackBranch && fallbackBranch !== targetBranch) {
+    headSha = await getBranchSha(token, base, String(fallbackBranch).trim());
+    if (headSha) readBranch = String(fallbackBranch).trim();
+  }
+
+  if (!headSha) {
+    return {
+      branch: readBranch,
+      headSha: null,
+      paths: [],
+      totalPaths: 0,
+      files: [],
+      omitted: 0,
+      empty: true,
+    };
+  }
+
+  const tree = await githubRequest(`${base}/git/trees/${headSha}?recursive=1`, {
+    token,
+  });
+  const entries = (tree?.tree || []).filter(
+    (entry) => entry.type === "blob" && entry.path
+  );
+  const paths = entries.map((entry) => entry.path).sort();
+  const terms = String(focus || "")
+    .toLowerCase()
+    .split(/[^a-z0-9._/-]+/)
+    .filter((term) => term.length >= 4)
+    .slice(0, 12);
+
+  const candidates = entries
+    .filter(isSnapshotCandidate)
+    .sort(
+      (a, b) =>
+        pathScore(a.path, terms) - pathScore(b.path, terms) ||
+        a.path.localeCompare(b.path)
+    );
+
+  const files = [];
+  let total = 0;
+  let omitted = 0;
+
+  for (const entry of candidates) {
+    if (files.length >= MAX_SNAPSHOT_FILES) {
+      omitted += 1;
+      continue;
+    }
+    if (entry.size && entry.size > MAX_FILE_CHARS * 4) {
+      omitted += 1;
+      continue;
+    }
+
+    try {
+      const blob = await githubRequest(`${base}/git/blobs/${entry.sha}`, {
+        token,
+      });
+      const text = decodeBase64Text(blob?.content);
+      if (text.includes("\u0000")) {
+        omitted += 1;
+        continue;
+      }
+
+      const remaining = MAX_TOTAL_CHARS - total;
+      if (remaining <= 200) {
+        omitted += 1;
+        continue;
+      }
+
+      const limit = Math.min(MAX_FILE_CHARS, remaining);
+      const content =
+        text.length > limit ? `${text.slice(0, limit)}\n… (truncated)` : text;
+      total += content.length;
+      files.push({
+        path: entry.path,
+        content,
+        truncated: content.length < text.length,
+      });
+    } catch {
+      // A file that cannot be read should not block the rest of the snapshot.
+      omitted += 1;
+    }
+  }
+
+  files.sort((a, b) => a.path.localeCompare(b.path));
+
+  return {
+    branch: targetBranch,
+    headSha,
+    paths: paths.slice(0, MAX_LISTED_PATHS),
+    totalPaths: paths.length,
+    files,
+    omitted,
+    empty: false,
   };
 }

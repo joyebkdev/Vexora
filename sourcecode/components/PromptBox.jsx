@@ -11,11 +11,14 @@ import {
   isUnavailableModel,
 } from "@/config/providers";
 import {
+  ACCESS_NOTICE,
+  claimsRepositoryAccess,
   claimsUnconfirmedSave,
   getWorkspacePrompt,
   parseWorkspaceChanges,
   toStoredChanges,
 } from "@/config/workspace";
+import { readRepositorySnapshot } from "@/config/github";
 import { needsLanguageRetry, needsUsefulReply, withLanguageRule } from "@/config/language";
 import { useAppContext } from "@/context/AppContext";
 import { useGitHub } from "@/context/GitHubContext";
@@ -38,7 +41,6 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
   const provider = activeKey ? getProvider(activeKey.provider) : null;
   const model = getKeyModel(activeKey);
   const sampling = getModelSampling(model);
-  const workspaceContext = getWorkspacePrompt(github);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -316,6 +318,30 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
     };
 
     try {
+      // Read the selected branch so the model can edit the real files instead
+      // of asking the user to paste them. A failed read does not block chat.
+      let snapshot = null;
+      let snapshotError = "";
+      if (github.token && github.repo) {
+        try {
+          snapshot = await readRepositorySnapshot({
+            token: github.token,
+            owner: github.repo.owner,
+            repo: github.repo.name,
+            branch: github.repo.branch,
+            fallbackBranch: github.repo.defaultBranch,
+            focus: text,
+          });
+        } catch (error) {
+          snapshotError = error.message;
+        }
+      }
+      const workspaceContext = getWorkspacePrompt(
+        github,
+        snapshot,
+        snapshotError
+      );
+
       const history = [...chat.messages, userPrompt]
         .filter(
           (message) =>
@@ -361,15 +387,35 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
       // claimed until GitHub returns a commit.
       const parsed = parseWorkspaceChanges(finalReply);
 
-      if (assistantId && parsed.text !== finalReply) {
-        const summary = parsed.hasChanges
-          ? parsed.text ||
-            `Prepared ${parsed.files.length} file${
-              parsed.files.length === 1 ? "" : "s"
-            } to commit${github.repo ? ` to ${github.repo.owner}/${github.repo.name}` : ""}.`
-          : parsed.text;
-        updateMessage(assistantId, { content: summary });
-        displayed = summary;
+      let summary = parsed.text;
+      if (parsed.hasChanges && !summary) {
+        summary = `Prepared ${parsed.files.length} file${
+          parsed.files.length === 1 ? "" : "s"
+        } to commit${
+          github.repo ? ` to ${github.repo.owner}/${github.repo.name}` : ""
+        }.`;
+      }
+
+      // Vexora owns the GitHub connection. Never let the model imply that it
+      // personally browsed or has access to the repository.
+      const falseCommitClaim =
+        !parsed.hasChanges &&
+        Boolean(github.repo) &&
+        claimsUnconfirmedSave(summary);
+      const notices = [];
+      if (github.repo && claimsRepositoryAccess(summary)) {
+        notices.push(ACCESS_NOTICE);
+      }
+      if (falseCommitClaim) {
+        notices.push("> Nothing was committed by this reply.");
+      }
+      const visibleReply = notices.length
+        ? `${notices.join("\n\n")}\n\n${summary}`
+        : summary;
+
+      if (assistantId && visibleReply !== finalReply) {
+        updateMessage(assistantId, { content: visibleReply });
+        displayed = visibleReply;
       }
 
       if (parsed.hasChanges) {
@@ -432,16 +478,10 @@ const PromptBox = ({ isLoading, setIsLoading }) => {
             toast.error(`GitHub: ${commitError.message}`);
           }
         }
-      } else if (github.repo && claimsUnconfirmedSave(parsed.text)) {
+      } else if (falseCommitClaim) {
         // The reply talked about saving or pushing but returned no file
         // blocks, so no commit could happen. State that plainly instead of
         // letting the claim stand.
-        if (assistantId) {
-          const notice =
-            "> Nothing was committed by this reply.\n\n";
-          updateMessage(assistantId, { content: `${notice}${parsed.text}` });
-          displayed = parsed.text;
-        }
         appendMessage(chat.id, {
           role: "action",
           content: "",

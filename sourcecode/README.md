@@ -144,7 +144,10 @@ vexora/
   is sent **only** to `api.github.com`.
 - The connected GitHub account, repository, branch and access status are added
   to chat requests as workspace context so the model knows where project files
-  belong. The GitHub token itself is never included in those requests.
+  belong. A small text snapshot of the selected branch (README, config files and
+  files named in your message, capped at roughly 24k characters) is also sent so
+  the model can edit existing files. Binary, lock and build files are skipped.
+  The GitHub token itself is never included in those requests.
 - Older `vexora:settings` and `deepseek-clone:*` data is migrated automatically
   on first load.
 - Keys are sent **only** to the provider you selected.
@@ -205,6 +208,12 @@ vexora/
   save but returns no file blocks, Vexora marks it "Nothing was committed" and
   shows no commit link. Failed commits keep the prepared files so **Retry
   commit** can run again.
+- **Reading the project:** before each reply, Vexora reads the selected branch
+  (Git tree plus a small text snapshot) so the model can append to or modify
+  existing files instead of asking you to paste them. It prioritizes README,
+  project config and files named in your message, skips binaries, lockfiles and
+  build output, and falls back to the default branch for a branch that does not
+  exist yet. The snapshot is context only; the token is never sent to the model.
 - Free-tier rules are provider-side and rate-limited. A model listed as free can
   still return quota errors.
 - Some model names are plan-specific, so always prefer the live list if a request

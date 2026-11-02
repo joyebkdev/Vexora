@@ -140,7 +140,21 @@ const CLAIM =
 // pushing but returned no file blocks, so nothing was actually committed.
 export const claimsUnconfirmedSave = (text) => CLAIM.test(String(text || ""));
 
-const writeRules = (repo) => `Project files: the user's workspace is ${repo.owner}/${repo.name} on branch ${repo.branch}. When the user asks you to create or change project files, write each file as its own fenced block with this exact header:
+const ACCESS_CLAIM =
+  /(?:\bi(?:'m| am)\s+(?:already\s+)?connected\b|\bi\s+(?:have|'ve got|got)\s+(?:read\/?write|read and write|write|read|full)\s+access\b|\bi\s+can\s+(?:access|read|modify|push\s+to)\s+(?:your|the|any)\s+repo(?:sitory)?\b)/i;
+
+// The app owns the GitHub connection; the model must not claim it does.
+export const claimsRepositoryAccess = (text) =>
+  ACCESS_CLAIM.test(String(text || ""));
+
+export const ACCESS_NOTICE =
+  "> Vexora holds the GitHub connection, not the assistant. This reply works from the repository snapshot Vexora read with your token.";
+
+const accessRule = `Access: Vexora, not you, holds the user's GitHub token and performs every GitHub read and commit. You cannot browse GitHub, call its API, or reach any repository. Never say you are connected to GitHub, that you have access, or that you can open other repositories. If the user asks about access, explain that Vexora can read the selected repository and commit to it with their connected token, and that you work only from the repository snapshot Vexora includes with each request.`;
+
+const writeRules = (repo) => `${accessRule}
+
+Project files: the user's workspace is ${repo.owner}/${repo.name} on branch ${repo.branch}. When the user asks you to create or change project files, write each file as its own fenced block with this exact header:
 
 \`\`\`vexora-file path=<repository-relative path>
 <complete file content>
@@ -156,17 +170,69 @@ Rules:
 - Use relative paths with forward slashes. Never use absolute paths, drive letters or "..".
 - Vexora applies these blocks and commits them to the selected branch. You cannot run git, commit or push on your own.
 - Never say files were saved, committed, pushed or finished, and never invent commit hashes or links. The app appends the real commit result after it runs.
+- When changing an existing file, start from the snapshot content and return the complete updated file. Never ask the user to paste a file that is already in the snapshot.
+- If a file you need is not in the snapshot, say Vexora did not include it and ask for it by path. Never guess its contents.
 - Do not emit file blocks when you are only explaining, reviewing or answering a question.`;
 
-export const getWorkspacePrompt = (github) => {
+export const formatRepositorySnapshot = (snapshot, error = "") => {
+  if (error) {
+    return `Repository snapshot unavailable: ${error} Do not guess file contents; tell the user the repository read failed.`;
+  }
+  if (!snapshot) return "";
+  if (snapshot.empty) {
+    return "Repository snapshot: the selected branch has no files yet.";
+  }
+
+  const lines = [
+    `Repository snapshot read from GitHub for this request (branch ${snapshot.branch}).`,
+    `${snapshot.totalPaths} file${
+      snapshot.totalPaths === 1 ? "" : "s"
+    } in the tree${
+      snapshot.totalPaths > snapshot.paths.length
+        ? ` (showing the first ${snapshot.paths.length})`
+        : ""
+    }: ${snapshot.paths.join(", ")}`,
+  ];
+
+  if (snapshot.files.length) {
+    lines.push("File contents as they exist on GitHub right now:");
+    snapshot.files.forEach((file) => {
+      lines.push(`--- ${file.path} ---\n${file.content}`);
+    });
+  } else {
+    lines.push(
+      "No file contents were loaded for this request. Do not invent file contents."
+    );
+  }
+
+  if (snapshot.omitted) {
+    lines.push(
+      `${snapshot.omitted} more file${
+        snapshot.omitted === 1 ? " was" : "s were"
+      } not loaded into this snapshot.`
+    );
+  }
+
+  return lines.join("\n\n");
+};
+
+export const getWorkspacePrompt = (github, snapshot = null, snapshotError = "") => {
   const context = getGitHubContext(github);
   const repo = github?.repo;
   if (!context || !github?.user?.login || !repo?.owner || !repo?.name) {
     return context;
   }
-  return `${context}\n\n${writeRules({
-    owner: repo.owner,
-    name: repo.name,
-    branch: repo.branch || repo.defaultBranch || "main",
-  })}`;
+
+  const snapshotText = formatRepositorySnapshot(snapshot, snapshotError);
+  return [
+    context,
+    writeRules({
+      owner: repo.owner,
+      name: repo.name,
+      branch: repo.branch || repo.defaultBranch || "main",
+    }),
+    snapshotText,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 };

@@ -104,6 +104,11 @@ or use "Clear site data" in the browser.
   as workspace context, so it knows where project files belong. It is told not
   to claim a save happened unless the app confirms it. The GitHub token is never
   included in the AI request.
+- Before each reply, Vexora reads the selected branch from GitHub (tree plus a
+  small text snapshot of README, config and files named in the message, capped
+  at roughly 24k characters). That snapshot is included in the AI request so the
+  model can edit existing files instead of asking you to paste them. Binary,
+  lock and build files are skipped, and the token is never sent to the model.
 - The model cannot run git. It returns one `vexora-file path=...` fenced block
   per file (`vexora-delete path=...` for removals), and Vexora commits those
   blocks, then appends a card with the real SHA, branch and commit link. A reply
